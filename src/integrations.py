@@ -312,7 +312,7 @@ async def execute_api_call(
     if not integration.get("enabled", True):
         return {"error": f"Integration '{integration.get('name')}' is disabled", "exit_code": 1}
 
-    base_url = integration.get("base_url", "").rstrip("/")
+    base_url = integration.get("base_url", "").strip().rstrip("/")
     if not base_url:
         return {"error": "Integration has no base_url configured", "exit_code": 1}
 
@@ -374,6 +374,13 @@ async def execute_api_call(
         parts = api_key.split(":", 1)
         if len(parts) == 2:
             auth = httpx.BasicAuth(parts[0], parts[1])
+
+    # Always-on query params defined on the integration (e.g. credentials an
+    # API requires on every request, like Adzuna's app_id/app_key). Caller-
+    # supplied params take precedence so a call can still override a default.
+    default_params = integration.get("default_params")
+    if default_params:
+        params = {**default_params, **(params or {})}
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:

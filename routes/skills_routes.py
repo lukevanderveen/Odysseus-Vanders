@@ -1474,7 +1474,7 @@ def setup_skills_routes(skills_manager: SkillsManager) -> APIRouter:
             "pitfalls": sk.pitfalls,
             "verification": sk.verification,
             "body_extra": sk.body_extra,
-        })
+        }, owner=user)
         if not ok:
             raise HTTPException(500, "Update failed")
         # Manual markdown edits can create or substantially rewrite a draft
@@ -1496,7 +1496,7 @@ def setup_skills_routes(skills_manager: SkillsManager) -> APIRouter:
         updates = body.dict(exclude_none=True)
         if not updates:
             return {"ok": True}
-        ok = skills_manager.update_skill(match.get("name"), updates)
+        ok = skills_manager.update_skill(match.get("name"), updates, owner=user)
         if not ok:
             raise HTTPException(404, "Skill not found")
         if not match.get("audit_verdict"):
