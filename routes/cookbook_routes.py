@@ -38,7 +38,9 @@ from routes.cookbook_helpers import (
     _ps_squote, _bash_squote, _validate_serve_cmd, _parse_serve_phase,
     _safe_env_prefix, _local_tooling_path_export, _append_serve_preflight_exit_lines,
     _append_serve_exit_code_lines, _cached_model_scan_script, _ollama_bind_from_cmd,
-    _pip_install_fallback_chain, ModelDownloadRequest, ServeRequest,
+    _pip_install_fallback_chain, _force_utf8_io_bash_lines, _ollama_model_name,
+    _find_live_download_session, _python_download_script,
+    ModelDownloadRequest, ServeRequest,
 )
 
 _HF_TOKEN_STATUS_SNIPPET = (
@@ -432,6 +434,10 @@ def setup_cookbook_routes() -> APIRouter:
         # No script/tee needed — we'll use tmux capture-pane to read output
         lines = ["#!/bin/bash"]
         lines.extend(_user_shell_path_bootstrap())
+        # Force UTF-8 std streams so hf's final success "✓" doesn't crash the
+        # (consoleless, cp1252) detached process on Windows and flip a completed
+        # download to DOWNLOAD_FAILED. No-op on POSIX.
+        lines.extend(_force_utf8_io_bash_lines())
         if req.hf_token:
             lines.append(f"export HF_TOKEN='{_bash_squote(req.hf_token)}'")
         # Ensure pip-user scripts (e.g. hf CLI installed via --user) are on PATH
@@ -462,6 +468,16 @@ def setup_cookbook_routes() -> APIRouter:
         local_windows = IS_WINDOWS and not remote
         logger.info(f"Download request: repo={req.repo_id}, remote={remote}, ssh_port={req.ssh_port}, platform={req.platform}")
 
+        # Dedup: if this repo is already being downloaded by a live local session,
+        # return it instead of launching a rival. Two concurrent `hf download` of
+        # one repo deadlock on the HF cache lock — both stall at 0% and one is
+        # branded "crashed" (the UI double-fire and slow re-clicks both hit this).
+        if local_windows:
+            _dupe = _find_live_download_session(req.repo_id, TMUX_LOG_DIR, pid_alive)
+            if _dupe:
+                logger.info(f"Download dedup: {req.repo_id} already running as {_dupe}")
+                return {"ok": True, "session_id": _dupe, "remote": "local", "deduped": True}
+
         if not is_windows and not local_windows and not await _binary_available("tmux", remote, req.ssh_port):
             return {
                 "ok": False,
@@ -475,6 +491,9 @@ def setup_cookbook_routes() -> APIRouter:
             ps_lines = []
             ps_lines.append('$sessionDir = "$env:TEMP\\odysseus-sessions"')
             ps_lines.append('New-Item -ItemType Directory -Force -Path $sessionDir | Out-Null')
+            # Force UTF-8 so hf's success "✓" doesn't crash on a cp1252 console.
+            ps_lines.append('$env:PYTHONUTF8 = "1"')
+            ps_lines.append('$env:PYTHONIOENCODING = "utf-8"')
             if req.hf_token:
                 ps_lines.append(f"$env:HF_TOKEN = '{_ps_squote(req.hf_token)}'")
             if req.env_prefix:
@@ -597,10 +616,50 @@ def setup_cookbook_routes() -> APIRouter:
             # "not authorized" failure apart from a missing token.
             lines.append(_HF_TOKEN_STATUS_SNIPPET)
             if IS_WINDOWS:
-                # Detached path: no controlling TTY, so skip `< /dev/null`
-                # (handled by Popen stdin=DEVNULL) and don't keep a shell open.
-                lines.append(hf_cmd)
-                lines.append('if [ $? -eq 0 ]; then echo ""; echo "DOWNLOAD_OK"; else echo ""; echo "DOWNLOAD_FAILED (exit $?)"; fi')
+                # Detached path: no controlling TTY. Drive the download from
+                # Python so real byte progress is visible in the log — the hf CLI
+                # prints no progress without a TTY (classic) or only a file-count
+                # bar stuck at 0% (Xet). See _python_download_script.
+                _dl_py = TMUX_LOG_DIR / f"{session_id}_dl.py"
+                _dl_py.write_text(
+                    _python_download_script(req.repo_id, req.include, _dl_base),
+                    encoding="utf-8",
+                )
+                lines.append(f"python {shlex.quote(_dl_py.as_posix())}")
+                lines.append('_ody_rc=$?')
+                # Auto-register the freshly downloaded GGUF into Ollama so it's
+                # usable in chat/agents immediately. On Windows, Ollama is the
+                # documented local serve backend (native llama.cpp needs a
+                # compiler + AVX-512 the platform/CPU often lacks), so a GGUF in
+                # the HF cache is otherwise unusable. Reuses the just-downloaded
+                # file — `snapshot_download` is an instant cache hit that returns
+                # the local path. No-op when ollama isn't installed or no .gguf
+                # was fetched (e.g. safetensors-only repos).
+                _oname = _ollama_model_name(req.repo_id)
+                _modelfile = (TMUX_LOG_DIR / f"{session_id}.modelfile").as_posix()
+                lines.append('export PATH="$PATH:$HOME/AppData/Local/Programs/Ollama"')
+                lines.append('if [ "$_ody_rc" = "0" ] && command -v ollama >/dev/null 2>&1; then')
+                lines.append(
+                    "  _ody_gguf=\"$(ODY_REPO=" + shlex.quote(req.repo_id)
+                    + " ODY_PAT=" + shlex.quote(req.include or "")
+                    + " python -c 'import os,glob"
+                    + "; from huggingface_hub import snapshot_download as s"
+                    + "; p=os.environ.get(\"ODY_PAT\") or None"
+                    + "; d=s(os.environ[\"ODY_REPO\"], allow_patterns=[p] if p else None)"
+                    + "; g=[x for x in glob.glob(os.path.join(d,\"**\",\"*.gguf\"),recursive=True) if \"mmproj\" not in os.path.basename(x).lower()]"
+                    + "; print(g[0] if g else \"\")' 2>/dev/null)\""
+                )
+                lines.append('  if [ -n "$_ody_gguf" ] && [ -f "$_ody_gguf" ]; then')
+                lines.append(f'    printf "FROM %s\\n" "$_ody_gguf" > {shlex.quote(_modelfile)}')
+                lines.append(f'    echo "[odysseus] Registering {_oname} into Ollama so it is usable in chat..."')
+                lines.append(f'    ollama create {shlex.quote(_oname)} -f {shlex.quote(_modelfile)}; _ody_rc=$?')
+                lines.append(f'    rm -f {shlex.quote(_modelfile)}')
+                lines.append(f'    [ "$_ody_rc" = "0" ] && echo "[odysseus] OLLAMA_ATTACHED {_oname}"')
+                lines.append('  else')
+                lines.append('    echo "[odysseus] No .gguf found to register into Ollama (skipping auto-attach)."')
+                lines.append('  fi')
+                lines.append('fi')
+                lines.append('if [ "$_ody_rc" = "0" ]; then echo ""; echo "DOWNLOAD_OK"; else echo ""; echo "DOWNLOAD_FAILED (exit $_ody_rc)"; fi')
             else:
                 # < /dev/null suppresses interactive "update available? [Y/n]" prompt
                 lines.append(f"{hf_cmd} < /dev/null")
@@ -616,6 +675,12 @@ def setup_cookbook_routes() -> APIRouter:
 
         if setup_cmd is None:
             # LOCAL Windows: launch the bash wrapper detached; no tmux setup_cmd.
+            # Drop a repo marker first so a concurrent request for the same repo
+            # is deduped to this session (see _find_live_download_session).
+            try:
+                (TMUX_LOG_DIR / f"{session_id}.repo").write_text(req.repo_id, encoding="utf-8")
+            except Exception:
+                pass
             try:
                 _launch_local_detached(session_id, lines)
             except Exception as e:
@@ -1643,12 +1708,22 @@ def setup_cookbook_routes() -> APIRouter:
     async def get_cookbook_state(request: Request):
         """Load saved cookbook state (tasks, servers, presets, settings)."""
         require_admin(request)
+        state = {}
         if _cookbook_state_path.exists():
             try:
-                return _state_for_client(json.loads(_cookbook_state_path.read_text(encoding="utf-8")))
+                state = _state_for_client(json.loads(_cookbook_state_path.read_text(encoding="utf-8")))
             except Exception:
-                return {}
-        return {}
+                state = {}
+        # Tell the client what OS THIS (local) server runs on. The Cookbook UI
+        # polls a local task's status with OS-specific commands (PowerShell + pid
+        # files on Windows, tmux on POSIX); without this it defaults to tmux,
+        # which doesn't exist on Windows, so every successful local download is
+        # mis-reported as "crashed".
+        if isinstance(state, dict):
+            state["server_platform"] = (
+                "windows" if IS_WINDOWS else ("darwin" if sys.platform == "darwin" else "linux")
+            )
+        return state
 
     @router.post("/api/cookbook/state")
     async def save_cookbook_state(request: Request):

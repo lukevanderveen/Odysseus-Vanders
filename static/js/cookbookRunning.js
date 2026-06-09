@@ -613,8 +613,32 @@ export function _tmuxCmd(task, tmuxArgs) {
 }
 
 function _winSessionCmd(task, tmuxArgs) {
-  const sd = '$env:TEMP\\odysseus-sessions';
   const sid = task.sessionId;
+  if (!task.remoteHost) {
+    // ── Local Windows: poll the detached-process pid/log files in
+    // %TEMP%\odysseus-tmux via PowerShell. tmux doesn't exist on Windows, and
+    // the ssh path below is only for remote hosts — without this a successful
+    // local download is polled with tmux (which fails) and mis-flagged crashed.
+    // The -Command arg is single-quoted so shell_exec's `bash -c` passes it
+    // literally (no $-expansion); PowerShell expands its own $env:TEMP/$p.
+    const _dir = '$env:TEMP\\odysseus-tmux';
+    const _ps = (body) => `powershell -NoProfile -Command '${body}'`;
+    if (tmuxArgs.includes('capture-pane')) {
+      const lines = tmuxArgs.match(/-S\s*-?(\d+)/)?.[1] || '200';
+      return _ps(`Get-Content "${_dir}\\${sid}.log" -Tail ${lines} -ErrorAction SilentlyContinue`);
+    }
+    if (tmuxArgs.includes('has-session')) {
+      return _ps(`$p = Get-Content "${_dir}\\${sid}.pid" -ErrorAction SilentlyContinue; if ($p) { Get-Process -Id $p -ErrorAction SilentlyContinue | Out-Null; if ($?) { exit 0 } else { exit 1 } } else { exit 1 }`);
+    }
+    if (tmuxArgs.includes('kill-session')) {
+      return _ps(`$p = Get-Content "${_dir}\\${sid}.pid" -ErrorAction SilentlyContinue; if ($p) { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue }; Remove-Item "${_dir}\\${sid}.*" -Force -ErrorAction SilentlyContinue`);
+    }
+    if (tmuxArgs.includes('send-keys') && tmuxArgs.includes('C-c')) {
+      return _ps(`$p = Get-Content "${_dir}\\${sid}.pid" -ErrorAction SilentlyContinue; if ($p) { Stop-Process -Id $p -ErrorAction SilentlyContinue }`);
+    }
+    return _ps('exit 0');
+  }
+  const sd = '$env:TEMP\\odysseus-sessions';
   const pf = _sshPrefix(_getPort(task));
   const host = task.remoteHost;
   if (tmuxArgs.includes('capture-pane')) {
@@ -852,7 +876,13 @@ export async function _syncFromServer() {
   try {
     const res = await fetch('/api/cookbook/state', { credentials: 'same-origin' });
     if (!res.ok) return false;
-    const state = _normalizeState(await res.json());
+    const raw = await res.json();
+    // Record THIS server's OS so local task status uses the right poller
+    // (PowerShell on Windows vs tmux on POSIX). See _getPlatform.
+    if (raw && typeof raw.server_platform === 'string' && _envState) {
+      _envState.serverPlatform = raw.server_platform;
+    }
+    const state = _normalizeState(raw);
     if (!state || !state.env) return false;
 
     const localTasks = _loadTasks();

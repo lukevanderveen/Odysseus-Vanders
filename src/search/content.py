@@ -248,6 +248,11 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
             raise RateLimitError(f"Rate limit hit for {url} (attempt {retry_attempt})")
 
         response.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        # 4xx/5xx (e.g. 403 Forbidden) — degrade gracefully rather than
+        # letting the error bubble up and 500 the whole chat request.
+        error_logger.error(f"HTTPStatusError fetching {url} (attempt {retry_attempt}): {e}")
+        return _empty_result(url, f"HTTPStatusError: {e}")
     except httpx.RequestError as e:
         error_logger.error(f"NetworkError fetching {url} (attempt {retry_attempt}): {e}")
         return _empty_result(url, f"NetworkError: {e}")

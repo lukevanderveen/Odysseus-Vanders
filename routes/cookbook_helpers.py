@@ -137,6 +137,13 @@ def _local_tooling_path_export(executable: str) -> str:
         bin_dir = posixpath.dirname(executable)
     else:
         bin_dir = os.path.dirname(os.path.abspath(executable))
+    # The runner is a bash script even on native Windows (Git Bash), so a
+    # Windows path (`D:\venv\Scripts`) must be rewritten to Git-Bash POSIX form
+    # (`/d/venv/Scripts`). A backslash path is unusable as a bash PATH entry, so
+    # `hf` would never be found and downloads die with "command not found".
+    drive = re.match(r"^([A-Za-z]):[\\/](.*)$", bin_dir)
+    if drive:
+        bin_dir = "/" + drive.group(1).lower() + "/" + drive.group(2).replace("\\", "/")
     # Escape for a double-quoted context: $PATH must still expand, but spaces
     # and shell metacharacters in the path must be preserved literally.
     esc = (
@@ -171,6 +178,95 @@ def _pip_install_fallback_chain(package: str, *, python_cmd: str = "python3 -m p
     venv_check = f'{python_exe} -c "import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)"'
     # venv_check exits 0 (true) when IN a venv; --user is only valid outside one.
     return f"{base} || {{ {venv_check} || {user}; }}"
+
+
+def _python_download_script(repo_id: str, include: str | None, local_dir: str | None) -> str:
+    """Python source that downloads a HF repo while printing parseable byte
+    progress to stdout.
+
+    The detached download has no TTY, so the `hf` CLI shows no per-byte progress
+    (classic) or only a file-count bar stuck at 0% (Xet). We instead call
+    snapshot_download with a tqdm subclass whose display() unconditionally prints
+    ``Downloading <pct>% (<n>MB/<total>MB)`` — the exact ``Downloading…%`` shape
+    the Cookbook progress bar parses. Xet is disabled so the classic tqdm-backed
+    downloader runs (slightly slower, but it reports real progress). HF_TOKEN and
+    HF_HOME are inherited from the wrapper env."""
+    patterns = repr([include]) if include else "None"
+    ld = ("os.path.expanduser(" + repr(local_dir) + ")") if local_dir else "None"
+    return (
+        "import os\n"
+        "os.environ['HF_HUB_DISABLE_XET'] = '1'\n"
+        "os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '0'\n"
+        "from huggingface_hub import snapshot_download\n"
+        "from tqdm.auto import tqdm as _T\n"
+        "class T(_T):\n"
+        "    _last = -1\n"
+        "    def display(self, *a, **k):\n"
+        "        try:\n"
+        "            t = self.total or 0\n"
+        "            if t > 1048576:\n"  # byte-level bar, not the 'N files' counter
+        "                pct = int(self.n * 100 / t)\n"
+        "                if pct != T._last:\n"
+        "                    T._last = pct\n"
+        "                    print('Downloading %d%% (%dMB/%dMB)' % (pct, self.n // 1048576, t // 1048576), flush=True)\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "        return None\n"
+        f"_p = snapshot_download({repo_id!r}, allow_patterns={patterns}, local_dir={ld}, tqdm_class=T)\n"
+        "print('Downloading 100%')\n"
+        "print('path=' + _p)\n"
+    )
+
+
+def _find_live_download_session(repo_id, log_dir, is_alive):
+    """Return the session id of an in-flight download of ``repo_id``, or None.
+
+    Two concurrent ``hf download`` of one repo deadlock on the HF cache lock and
+    both stall at 0%, so a second request for a repo already being fetched must
+    be deduped to the live session instead of launching a rival. Each local
+    download drops a ``<session>.repo`` marker next to its ``.pid``; we match the
+    repo and keep only sessions whose process is still alive (dead/stale markers
+    don't block a fresh download)."""
+    try:
+        markers = sorted(log_dir.glob("cookbook-*.repo"))
+    except Exception:
+        return None
+    for marker in markers:
+        try:
+            if marker.read_text(encoding="utf-8").strip() != repo_id:
+                continue
+            sid = marker.stem
+            pid = int((log_dir / f"{sid}.pid").read_text(encoding="utf-8").strip())
+            if is_alive(pid):
+                return sid
+        except Exception:
+            continue
+    return None
+
+
+def _ollama_model_name(repo_id: str) -> str:
+    """Derive an Ollama model name from a HuggingFace GGUF repo id.
+
+    Cookbook auto-registers a downloaded GGUF into Ollama on Windows (the
+    documented local serve backend there). The Ollama tag drops the org prefix,
+    strips the trailing ``-GGUF`` marker, and lowercases (Ollama names are
+    lowercase): ``bartowski/Qwen2.5-Math-7B-Instruct-GGUF`` -> ``qwen2.5-math-7b-instruct``."""
+    base = repo_id.split("/")[-1]
+    base = re.sub(r"[-_. ]?gguf$", "", base, flags=re.IGNORECASE)
+    return base.lower()
+
+
+def _force_utf8_io_bash_lines() -> list[str]:
+    """Bash exports that force Python's std streams to UTF-8.
+
+    `hf download` completes the transfer, then prints a Unicode '✓' on success.
+    A detached process on Windows has no console, so Python's stdout falls back
+    to the locale codec (cp1252) and raises a 'charmap' UnicodeEncodeError while
+    printing that mark — turning a *successful* download into a non-zero exit
+    that the wrapper records as DOWNLOAD_FAILED. Forcing UTF-8 avoids it. No-op
+    on POSIX (already UTF-8). PYTHONIOENCODING wins even if the locale differs;
+    PYTHONUTF8 also flips filesystem/encoding defaults to UTF-8."""
+    return ["export PYTHONUTF8=1", "export PYTHONIOENCODING=utf-8"]
 
 
 def _cached_model_scan_script(model_dirs: list[str] | None = None) -> str:
@@ -308,7 +404,28 @@ def _cached_model_scan_script(model_dirs: list[str] | None = None) -> str:
         "            seen.add(name)",
         "            models.append({'repo_id':name,'size_bytes':size_bytes,'nb_files':1,'has_incomplete':False,'path':'ollama','backend':'ollama','is_ollama':True})",
         "        return",
-        "scan_hf(os.path.expanduser('~/.cache/huggingface/hub'))",
+        # Resolve the HF hub cache dir the same way huggingface_hub does, so a
+        # cache relocated via HF_HOME/HF_HUB_CACHE (e.g. moved off a full C:
+        # drive) is still scanned. Resolved on the *target* host at runtime, so
+        # it's correct for both local and remote scans. The default is always
+        # scanned too, for caches downloaded before any relocation.",
+        "def hf_hub_dirs():",
+        "    dirs = []",
+        "    hub = os.environ.get('HF_HUB_CACHE')",
+        "    if not hub:",
+        "        home = os.environ.get('HF_HOME')",
+        "        if home:",
+        "            hub = os.path.join(home, 'hub')",
+        "        else:",
+        "            xdg = os.environ.get('XDG_CACHE_HOME')",
+        "            base = xdg if xdg else os.path.expanduser('~/.cache')",
+        "            hub = os.path.join(base, 'huggingface', 'hub')",
+        "    dirs.append(hub)",
+        "    default = os.path.expanduser('~/.cache/huggingface/hub')",
+        "    if os.path.normcase(os.path.abspath(default)) != os.path.normcase(os.path.abspath(hub)):",
+        "        dirs.append(default)",
+        "    return dirs",
+        "for _hub in hf_hub_dirs(): scan_hf(_hub)",
         "scan_ollama()",
         "scan_ollama_api()",
     ]

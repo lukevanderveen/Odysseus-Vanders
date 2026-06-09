@@ -1,6 +1,7 @@
 # routes/memory_routes.py
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile, File
 from typing import Dict, Any, Optional, List
+import asyncio
 import json
 import os
 import re
@@ -27,14 +28,99 @@ from src.request_models import MemoryAddRequest
 from core.database import SessionLocal
 from src.llm_core import llm_call_async
 from services.memory.memory_extractor import audit_memories
+from services.memory.import_jobs import ImportJobStore
 from src.auth_helpers import get_current_user
 from src.endpoint_resolver import resolve_endpoint
 
 logger = logging.getLogger(__name__)
 
+
+async def _extract_suggestions_from_text(
+    text: str,
+    filename: str,
+    endpoint_url: str,
+    model: str,
+    headers: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Run the LLM memory-extraction over document text and return suggestions.
+
+    Lifted out of the request handler so it can run in a background job (slow
+    local models routinely exceed the server's hard request timeout). Raises on
+    a hard LLM failure; an unparseable response falls back to line splitting.
+    """
+    # Truncate very long documents
+    if len(text) > 15000:
+        text = text[:15000] + "\n[Truncated]"
+
+    import_prompt = (
+        "You are a memory extraction assistant. The user uploaded a document. "
+        "Analyze the text below and extract specific, useful facts — things like "
+        "names, preferences, jobs, locations, relationships, opinions, projects, "
+        "goals, contacts, or any other personal details worth remembering.\n\n"
+        "Rules:\n"
+        "- Each fact should be a short, self-contained statement\n"
+        "- Do NOT extract generic knowledge\n"
+        "- Focus on personal, memorable information\n"
+        "- If there are no useful facts, return an empty array\n\n"
+        "Return a JSON array of objects with 'text' and 'category' fields.\n"
+        "Categories: 'identity', 'preference', 'fact', 'contact', 'project', 'goal'\n\n"
+        "Return ONLY valid JSON, no markdown fences."
+    )
+
+    raw = await llm_call_async(
+        endpoint_url,
+        model,
+        [
+            {"role": "system", "content": import_prompt},
+            {"role": "user", "content": f"Document: {filename}\n\n{text}"},
+        ],
+        temperature=0.2,
+        max_tokens=2000,
+        headers=headers,
+    )
+
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+    try:
+        suggestions = json.loads(raw)
+    except json.JSONDecodeError:
+        # Fallback: split by lines, stripping any "1.", "2)" markdown-list
+        # numbering the model added so saved memories don't keep the prefix.
+        lines = [_strip_list_prefix(l.strip()) for l in raw.splitlines() if l.strip() and len(l.strip()) > 5]
+        return [{"text": l, "category": "fact"} for l in lines[:20]]
+
+    if not isinstance(suggestions, list):
+        return []
+    normalized = []
+    for s in suggestions:
+        if not s:
+            continue
+        if isinstance(s, dict):
+            s = dict(s)
+            if s.get("text"):
+                s["text"] = _strip_list_prefix(str(s["text"]))
+            normalized.append(s)
+        else:
+            normalized.append({"text": _strip_list_prefix(str(s)), "category": "fact"})
+    return normalized
+
 def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionManager, memory_vector=None):
     """Set up memory-related routes."""
     router = APIRouter(prefix="/api/memory", tags=["memory"])
+
+    # Tracks in-flight file imports so a slow LLM extraction runs in the
+    # background instead of blocking (and timing out) the request.
+    import_jobs = ImportJobStore()
+    _pending_tasks: set = set()
+
+    def _spawn(coro) -> None:
+        # Keep a strong reference until the task finishes; bare create_task
+        # results can be garbage-collected mid-flight.
+        task = asyncio.create_task(coro)
+        _pending_tasks.add(task)
+        task.add_done_callback(_pending_tasks.discard)
 
     def _owner(request: Request) -> Optional[str]:
         return get_current_user(request)
@@ -397,71 +483,31 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
                 if direct:
                     return {"suggestions": direct, "filename": filename}
 
-        # Truncate very long documents
-        if len(text) > 15000:
-            text = text[:15000] + "\n[Truncated]"
+        # LLM extraction can outlast the server's hard request timeout on slow
+        # local models, so run it as a tracked background job and return an id
+        # the client polls via GET /import/status/{job_id}.
+        job_id = import_jobs.create(_owner(request), filename)
+        _spawn(import_jobs.run(
+            job_id,
+            _extract_suggestions_from_text(text, filename, endpoint_url, model, headers),
+        ))
+        return {"job_id": job_id, "status": "running", "filename": filename}
 
-        # Send to LLM for memory extraction
-        import_prompt = (
-            "You are a memory extraction assistant. The user uploaded a document. "
-            "Analyze the text below and extract specific, useful facts — things like "
-            "names, preferences, jobs, locations, relationships, opinions, projects, "
-            "goals, contacts, or any other personal details worth remembering.\n\n"
-            "Rules:\n"
-            "- Each fact should be a short, self-contained statement\n"
-            "- Do NOT extract generic knowledge\n"
-            "- Focus on personal, memorable information\n"
-            "- If there are no useful facts, return an empty array\n\n"
-            "Return a JSON array of objects with 'text' and 'category' fields.\n"
-            "Categories: 'identity', 'preference', 'fact', 'contact', 'project', 'goal'\n\n"
-            "Return ONLY valid JSON, no markdown fences."
-        )
-
-        try:
-            raw = await llm_call_async(
-                endpoint_url,
-                model,
-                [
-                    {"role": "system", "content": import_prompt},
-                    {"role": "user", "content": f"Document: {filename}\n\n{text}"},
-                ],
-                temperature=0.2,
-                max_tokens=2000,
-                headers=headers,
-            )
-
-            # Parse JSON
-            raw = raw.strip()
-            if raw.startswith("```"):
-                raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-
-            suggestions = json.loads(raw)
-            if isinstance(suggestions, list):
-                normalized = []
-                for s in suggestions:
-                    if not s:
-                        continue
-                    if isinstance(s, dict):
-                        s = dict(s)
-                        if s.get("text"):
-                            s["text"] = _strip_list_prefix(str(s["text"]))
-                        normalized.append(s)
-                    else:
-                        normalized.append({"text": _strip_list_prefix(str(s)), "category": "fact"})
-                suggestions = normalized
-            else:
-                suggestions = []
-
-            return {"suggestions": suggestions, "filename": filename}
-
-        except json.JSONDecodeError:
-            # Fallback: split by lines, stripping any "1.", "2)" markdown-list
-            # numbering the model added so saved memories don't keep the prefix.
-            lines = [_strip_list_prefix(l.strip()) for l in raw.splitlines() if l.strip() and len(l.strip()) > 5]
-            return {"suggestions": [{"text": l, "category": "fact"} for l in lines[:20]], "filename": filename}
-        except Exception as e:
-            logger.error(f"Memory import extraction failed: {e}")
-            raise HTTPException(502, f"LLM extraction failed: {str(e)}")
+    @router.get("/import/status/{job_id}")
+    def import_status(request: Request, job_id: str):
+        """Poll the status/result of a background memory-import extraction."""
+        from src.auth_helpers import require_privilege
+        require_privilege(request, "can_manage_memory")
+        job = import_jobs.get(job_id, owner=_owner(request))
+        if not job:
+            raise HTTPException(404, "Import job not found")
+        return {
+            "job_id": job_id,
+            "status": job["status"],
+            "suggestions": job["suggestions"],
+            "filename": job["filename"],
+            "error": job["error"],
+        }
 
     @router.post("/{memory_id}/pin")
     def pin_memory(request: Request, memory_id: str, pinned: bool = Form(True)):

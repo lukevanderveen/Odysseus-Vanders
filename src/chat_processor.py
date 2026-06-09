@@ -286,7 +286,11 @@ class ChatProcessor:
         skip_url_fetch = len(message) > 2000 or len(non_yt_urls) > 3
         if not skip_url_fetch:
             for url in non_yt_urls:
-                result = fetch_webpage_content(url)
+                try:
+                    result = fetch_webpage_content(url)
+                except Exception as e:
+                    logger.warning(f"URL auto-fetch failed for {url}: {e}")
+                    continue
                 if result.get('success'):
                     content = result.get('content', '')[:10000]
                     preface.append(untrusted_context_message(

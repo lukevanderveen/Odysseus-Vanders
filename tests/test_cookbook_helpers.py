@@ -9,7 +9,11 @@ from routes.cookbook_helpers import (
     _cached_model_scan_script,
     _append_serve_exit_code_lines,
     _append_serve_preflight_exit_lines,
+    _force_utf8_io_bash_lines,
+    _find_live_download_session,
+    _python_download_script,
     _local_tooling_path_export,
+    _ollama_model_name,
     _pip_install_fallback_chain,
     _ollama_bind_from_cmd,
     _safe_env_prefix,
@@ -83,6 +87,76 @@ def test_local_tooling_path_export_preserves_spaces_and_expands_path():
     line = _local_tooling_path_export("/Users/John Smith/.venv/bin/python3")
     assert line == 'export PATH="/Users/John Smith/.venv/bin:$PATH"'
     assert line.endswith(':$PATH"')  # $PATH stays expandable in double quotes
+
+
+def test_local_tooling_path_export_converts_windows_path_to_bash_form():
+    """The runner is a bash script even on native Windows, so a Windows venv
+    path (D:\\...\\Scripts) must be emitted as a Git-Bash POSIX path
+    (/d/.../Scripts). A backslash path is unusable as a bash PATH entry, so
+    `hf` is never found and downloads die with "command not found"."""
+    line = _local_tooling_path_export(r"D:\odysseus\venv\Scripts\python.exe")
+    assert line == 'export PATH="/d/odysseus/venv/Scripts:$PATH"'
+
+
+def test_python_download_script_emits_parseable_byte_progress():
+    """The detached download must show real byte progress. hf's CLI prints no
+    progress in a non-TTY log (or only a file-count bar stuck at 0%), so we drive
+    snapshot_download from Python with a tqdm subclass that prints 'Downloading
+    N%' lines the UI bar parses. Xet is disabled so the classic tqdm path runs."""
+    src = _python_download_script("org/Model-GGUF", "*Q4_K_M*", None)
+    assert "snapshot_download" in src
+    assert "org/Model-GGUF" in src
+    assert "*Q4_K_M*" in src
+    assert "HF_HUB_DISABLE_XET" in src
+    assert "Downloading" in src  # the parseable progress prefix
+    # Must be syntactically valid Python.
+    compile(src, "<dl>", "exec")
+
+
+def test_find_live_download_session_dedupes_same_repo(tmp_path):
+    """A second download of a repo already being fetched must be deduped — two
+    concurrent `hf download` of one repo deadlock on the HF cache lock and both
+    stall at 0%. Returns the live session id for the same repo, else None."""
+    # session A: downloading repo X, process alive
+    (tmp_path / "cookbook-aaaa.repo").write_text("org/Model-GGUF", encoding="utf-8")
+    (tmp_path / "cookbook-aaaa.pid").write_text("111", encoding="utf-8")
+    # session B: downloading repo X but its process is dead (stale)
+    (tmp_path / "cookbook-bbbb.repo").write_text("org/Model-GGUF", encoding="utf-8")
+    (tmp_path / "cookbook-bbbb.pid").write_text("222", encoding="utf-8")
+    alive = lambda pid: pid == 111  # only A is alive
+
+    assert _find_live_download_session("org/Model-GGUF", tmp_path, alive) == "cookbook-aaaa"
+    # A different repo has no live session.
+    assert _find_live_download_session("org/Other-GGUF", tmp_path, alive) is None
+
+
+def test_find_live_download_session_ignores_dead_sessions(tmp_path):
+    """If the only same-repo session is dead, don't dedupe — let a fresh download
+    proceed (the stale one isn't holding anything live)."""
+    (tmp_path / "cookbook-dead.repo").write_text("org/Model-GGUF", encoding="utf-8")
+    (tmp_path / "cookbook-dead.pid").write_text("999", encoding="utf-8")
+    assert _find_live_download_session("org/Model-GGUF", tmp_path, lambda pid: False) is None
+
+
+def test_ollama_model_name_strips_gguf_suffix_and_lowercases():
+    """Cookbook auto-registers a downloaded GGUF into Ollama. The Ollama model
+    name is derived from the repo: drop the org, strip the '-GGUF' suffix, and
+    lowercase (Ollama names are lowercase)."""
+    assert _ollama_model_name("bartowski/Qwen2.5-Math-7B-Instruct-GGUF") == "qwen2.5-math-7b-instruct"
+    assert _ollama_model_name("unsloth/LFM2-8B-A1B-GGUF") == "lfm2-8b-a1b"
+    assert _ollama_model_name("unsloth/gpt-oss-20b-GGUF") == "gpt-oss-20b"
+    # No org, no GGUF suffix: still lowercased, unchanged otherwise.
+    assert _ollama_model_name("My-Model") == "my-model"
+
+
+def test_force_utf8_io_bash_lines_force_utf8_streams():
+    """`hf download` finishes the transfer then prints a Unicode '✓'. On Windows
+    a detached process has no console, so Python's stdout falls back to cp1252
+    and crashes with a 'charmap' UnicodeEncodeError — making a *successful*
+    download report DOWNLOAD_FAILED. Forcing UTF-8 IO prevents that."""
+    lines = _force_utf8_io_bash_lines()
+    assert "export PYTHONUTF8=1" in lines
+    assert "export PYTHONIOENCODING=utf-8" in lines
 
 
 def test_pip_install_fallback_chain_prefers_venv_safe_install():

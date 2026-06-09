@@ -71,7 +71,7 @@ function _platformIcon(platform) {
   return '';
 }
 
-export let _envState = { env: 'none', envPath: '', hfToken: '', hfTokenConfigured: false, hfTokenMasked: '', gpus: '', remoteHost: '', servers: [], modelPaths: [], platform: '', defaultServer: '' };
+export let _envState = { env: 'none', envPath: '', hfToken: '', hfTokenConfigured: false, hfTokenMasked: '', gpus: '', remoteHost: '', servers: [], modelPaths: [], platform: '', serverPlatform: '', defaultServer: '' };
 let _lastCacheHostVal = null;
 let _cookbookOpeningSpinners = [];
 export function _lastCacheHost() { return _lastCacheHostVal; }
@@ -161,9 +161,25 @@ function _getPort(hostOrTask) {
 /** Get platform for a given host (or task object). Returns 'windows', 'termux', 'linux', or '' */
 export function _getPlatform(hostOrTask) {
   if (!hostOrTask) return _envState.platform || '';
-  if (typeof hostOrTask === 'object') return hostOrTask.platform || _getPlatform(hostOrTask.remoteHost);
+  if (typeof hostOrTask === 'object') {
+    if (hostOrTask.platform) return hostOrTask.platform;
+    if (hostOrTask.remoteHost) return _getPlatform(hostOrTask.remoteHost);
+    // Local task — runs on THIS server. Use the server-reported OS, falling
+    // back to the browser's OS (Cookbook is normally opened on localhost, so
+    // client OS == server OS). Without this a local task on a Windows server
+    // resolves to '' and its status is polled with tmux (absent on Windows),
+    // so a successful local download is mis-reported as "crashed".
+    return _envState.serverPlatform || _localPlatformGuess();
+  }
   const srv = _envState.servers.find(s => s.host === hostOrTask);
   return srv?.platform || '';
+}
+
+function _localPlatformGuess() {
+  const ua = (typeof navigator !== 'undefined' && (navigator.userAgent || navigator.platform)) || '';
+  if (/Win/i.test(ua)) return 'windows';
+  if (/Mac/i.test(ua)) return 'darwin';
+  return '';
 }
 
 /** Check if the current active server is Windows */

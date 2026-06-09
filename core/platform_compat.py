@@ -133,7 +133,13 @@ def kill_process_tree(pid: Optional[int]) -> None:
 _BASH_CACHE: Optional[str] = None
 _BASH_PROBED = False
 
-# Common Git-for-Windows install locations to probe when bash isn't on PATH.
+# Common Git-for-Windows install locations to probe. These are checked BEFORE
+# the PATH lookup on Windows: on a host with WSL, `C:\Windows\System32\bash.exe`
+# (the WSL launcher) is first on PATH, so `shutil.which("bash")` returns it — but
+# that is not Git Bash. It can't read our Windows-path `.sh` wrappers (it expects
+# `/mnt/c/...`) and is often installed with no Linux distro, so it dies instantly,
+# making every bash-launched feature (Cookbook downloads, background jobs) fail
+# with an empty log. Real Git Bash must win.
 _WINDOWS_BASH_FALLBACKS = (
     r"C:\Program Files\Git\bin\bash.exe",
     r"C:\Program Files\Git\usr\bin\bash.exe",
@@ -141,26 +147,78 @@ _WINDOWS_BASH_FALLBACKS = (
 )
 
 
+def _is_wsl_launcher(path: Optional[str]) -> bool:
+    """True if ``path`` is the Windows-Subsystem-for-Linux ``bash.exe`` shipped
+    in System32 (also surfaced via the SysNative redirector). That launcher is
+    not Git Bash and is unusable for our Windows-path bash wrappers."""
+    if not path:
+        return False
+    p = path.replace("/", "\\").lower()
+    return p.endswith(r"\windows\system32\bash.exe") or p.endswith(
+        r"\windows\sysnative\bash.exe"
+    )
+
+
+def _probe_bash(path: str) -> bool:
+    """True if ``path`` is a functional bash (a distro-less WSL stub is not).
+
+    Used only as a last-resort check before accepting the System32 WSL bash, so
+    we never return a launcher that fails on every invocation."""
+    try:
+        proc = subprocess.run(
+            [path, "-c", "exit 0"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            timeout=8,
+        )
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
+def _select_bash(which, exists, is_windows, probe) -> Optional[str]:
+    """Pure bash-resolution logic, injectable for tests.
+
+    POSIX: the plain PATH lookup. Windows: prefer real Git Bash (fallback
+    install locations first, then a non-WSL PATH entry); accept the System32 WSL
+    launcher only when nothing else exists *and* it actually works."""
+    if not is_windows:
+        return which("bash")
+
+    candidates: List[str] = [c for c in _WINDOWS_BASH_FALLBACKS if exists(c)]
+    path_bash = which("bash")
+    if path_bash and not _is_wsl_launcher(path_bash):
+        candidates.append(path_bash)
+
+    seen = set()
+    for cand in candidates:
+        key = cand.lower()
+        if key not in seen:
+            seen.add(key)
+            return cand
+
+    # Only the WSL launcher is available: use it only if it's functional
+    # (has a distro). Otherwise None, so callers surface "install Git Bash".
+    if path_bash and _is_wsl_launcher(path_bash) and probe(path_bash):
+        return path_bash
+    return None
+
+
 def find_bash() -> Optional[str]:
     """Locate a real ``bash`` interpreter, or None.
 
-    On Windows this is typically Git Bash / WSL. Many Odysseus features (the
-    agent ``bash`` tool, background jobs, Cookbook scripts) emit bash syntax, so
-    when a bash is present we use it and keep full parity with POSIX. Result is
-    cached.
+    On Windows this is typically Git Bash. Many Odysseus features (the agent
+    ``bash`` tool, background jobs, Cookbook scripts) emit bash syntax and run
+    Windows-path ``.sh`` wrappers, so we deliberately prefer Git Bash over the
+    System32 WSL launcher (see ``_select_bash``). Result is cached.
     """
     global _BASH_CACHE, _BASH_PROBED
     if _BASH_PROBED:
         return _BASH_CACHE
     _BASH_PROBED = True
-    found = shutil.which("bash")
-    if not found and IS_WINDOWS:
-        for cand in _WINDOWS_BASH_FALLBACKS:
-            if os.path.exists(cand):
-                found = cand
-                break
-    _BASH_CACHE = found
-    return found
+    _BASH_CACHE = _select_bash(shutil.which, os.path.exists, IS_WINDOWS, _probe_bash)
+    return _BASH_CACHE
 
 
 def has_bash() -> bool:

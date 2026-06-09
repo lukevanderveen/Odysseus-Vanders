@@ -1156,6 +1156,25 @@ export async function importMemories() {
   fileInput.click();
 }
 
+// Poll a background import job until it finishes. LLM extraction over a
+// document can outlast the server's request timeout, so the import endpoint
+// returns a job id and the work continues server-side.
+async function pollImportJob(jobId, { intervalMs = 1500, timeoutMs = 180000 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const res = await fetch(`${window.location.origin}/api/memory/import/status/${jobId}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Import status check failed');
+    }
+    const job = await res.json();
+    if (job.status === 'done') return job;
+    if (job.status === 'error') throw new Error(job.error || 'Import extraction failed');
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error('Import timed out');
+}
+
 async function handleImportFile(file) {
   if (!file) return;
 
@@ -1190,7 +1209,12 @@ async function handleImportFile(file) {
       throw new Error(err.detail || 'Import failed');
     }
 
-    const data = await res.json();
+    let data = await res.json();
+    // A .json fast-path returns suggestions inline; everything else returns a
+    // job id we poll until the background extraction completes.
+    if (data.job_id) {
+      data = await pollImportJob(data.job_id);
+    }
     const suggestions = data.suggestions || [];
 
     // Show suggestions using the existing suggestions UI

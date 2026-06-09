@@ -109,7 +109,56 @@ if (-not (Get-Command bash -ErrorAction SilentlyContinue)) {
     Write-Host "      https://git-scm.com/download/win" -ForegroundColor Yellow
 }
 
-# 6. Start the server (use `python -m uvicorn` - bare `uvicorn` may not be on PATH)
+# 6. Start the ChromaDB vector server (powers memory, document RAG, tool search).
+#    Native (non-Docker) runs need a standalone Chroma server on localhost:8100 -
+#    the app ships only the thin chromadb-client. The full server has its own
+#    dependency pins, so it lives in a separate .chroma-venv to keep the app's
+#    venv pristine. Idempotent: skipped if the port is already serving.
+Write-Step "Starting ChromaDB vector server (localhost:8100)"
+$chromaPort = 8100
+$chromaListening = $false
+try {
+    $chromaListening = [bool](Get-NetTCPConnection -LocalPort $chromaPort -State Listen -ErrorAction SilentlyContinue)
+} catch {
+    try {
+        $probe = New-Object Net.Sockets.TcpClient
+        $probe.Connect("127.0.0.1", $chromaPort); $chromaListening = $true; $probe.Close()
+    } catch { $chromaListening = $false }
+}
+
+if ($chromaListening) {
+    Write-Host ("Something is already listening on {0} - reusing it." -f $chromaPort)
+} else {
+    $chromaPy = Join-Path $PSScriptRoot ".chroma-venv\Scripts\python.exe"
+    $chromaExe = Join-Path $PSScriptRoot ".chroma-venv\Scripts\chroma.exe"
+    if (-not (Test-Path $chromaExe)) {
+        Write-Host "Setting up the Chroma server venv (first run only, downloads ~150MB)..."
+        & $pyExe @pyArgs -m venv .chroma-venv
+        & $chromaPy -m pip install --upgrade pip --quiet
+        & $chromaPy -m pip install chromadb --quiet
+    }
+    if (Test-Path $chromaExe) {
+        if (-not (Test-Path (Join-Path $PSScriptRoot "logs"))) { New-Item -ItemType Directory -Path (Join-Path $PSScriptRoot "logs") | Out-Null }
+        $chromaData = Join-Path $PSScriptRoot "data\chroma"
+        $chromaOut = Join-Path $PSScriptRoot "logs\chroma.out.log"
+        $chromaErr = Join-Path $PSScriptRoot "logs\chroma.err.log"
+        Start-Process -FilePath $chromaExe `
+            -ArgumentList @("run", "--host", "localhost", "--port", "$chromaPort", "--path", $chromaData) `
+            -WindowStyle Hidden -RedirectStandardOutput $chromaOut -RedirectStandardError $chromaErr | Out-Null
+        Write-Host "Waiting for ChromaDB to become ready..."
+        for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Milliseconds 750
+            try {
+                $resp = Invoke-WebRequest -Uri ("http://localhost:{0}/api/v2/heartbeat" -f $chromaPort) -UseBasicParsing -TimeoutSec 2
+                if ($resp.StatusCode -eq 200) { Write-Host "ChromaDB is ready." -ForegroundColor Green; break }
+            } catch { }
+        }
+    } else {
+        Write-Host "WARNING: Chroma server install failed; memory/RAG/tool-search will run degraded." -ForegroundColor Yellow
+    }
+}
+
+# 7. Start the server (use `python -m uvicorn` - bare `uvicorn` may not be on PATH)
 Write-Step ("Starting Odysseus at http://{0}:{1}" -f $BindHost, $Port)
 Write-Host "Press Ctrl+C to stop."
 Write-Host ""

@@ -31,6 +31,15 @@ let _saveTasks;
 // Storage keys
 const SERVE_STATE_KEY = 'cookbook-serve-state';
 
+// Guards against duplicate near-simultaneous download submissions for the same
+// repo. The download button can be triggered more than once per click (a
+// delegated container handler plus the per-panel handler both fire), and two
+// concurrent `hf download` of the same repo deadlock on the HuggingFace cache
+// lock — the loser dies without a success marker and the UI brands it "crashed".
+// Maps repo -> epoch ms of the last accepted submit.
+const _recentDownloadSubmits = new Map();
+const _DOWNLOAD_DEDUP_MS = 5000;
+
 // ── Panel field helpers ──
 
 export function _setPanelField(panel, field, value) {
@@ -460,6 +469,15 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
   }
   const repo = ggufSource?.repo || model.quant_repo || model.name;
   const include = backend === 'llamacpp' ? _ggufIncludePattern(model, ggufSource) : null;
+
+  // Drop duplicate submits for the same repo within a short window. A single
+  // click can reach here twice (delegated + direct handlers), and two parallel
+  // `hf download` of one repo deadlock on the HF cache lock → spurious "crashed".
+  const _dedupKey = `${repo}|${include || ''}|${hostOverride ?? ''}`;
+  const _nowTs = Date.now();
+  const _prevTs = _recentDownloadSubmits.get(_dedupKey);
+  if (_prevTs && (_nowTs - _prevTs) < _DOWNLOAD_DEDUP_MS) return;
+  _recentDownloadSubmits.set(_dedupKey, _nowTs);
 
   _syncEnvFromPanel(panel);
 
