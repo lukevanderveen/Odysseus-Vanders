@@ -688,6 +688,10 @@ app.include_router(setup_note_routes(task_scheduler))
 from routes.project_routes import setup_project_routes
 app.include_router(setup_project_routes())
 
+# Council reports (Agent Council Phase 2 — report runs + approval queue)
+from routes.council_routes import setup_council_routes
+app.include_router(setup_council_routes())
+
 # Email
 from routes.email_routes import setup_email_routes
 app.include_router(setup_email_routes())

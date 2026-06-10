@@ -29,7 +29,7 @@ def _run_node(script: str) -> dict:
         cwd=_REPO,
         capture_output=True,
         timeout=15,
-        text=True,
+        encoding="utf-8",  # node emits UTF-8; default cp1252 on Windows mangles it
     )
     assert res.returncode == 0, res.stderr
     out_lines = [ln for ln in res.stdout.splitlines() if ln.strip()]
@@ -69,6 +69,72 @@ def test_normalize_roots_trims_dedupes_and_strips_trailing_slashes(node_availabl
         ])));
     """)
     assert _run_node(script) == ["D:\\code", "D:\\", "/home/luke/projects"]
+
+
+def test_report_chip_covers_all_statuses(node_available):
+    script = textwrap.dedent("""
+        const { reportChip } = await import('./static/js/projectsLogic.js');
+        const label = (status) => reportChip({ status }).label;
+        console.log(JSON.stringify({
+          running:   label('running'),
+          draft:     label('draft'),
+          approved:  label('approved'),
+          dismissed: label('dismissed'),
+          error:     label('error'),
+        }));
+    """)
+    out = _run_node(script)
+    assert out == {
+        "running": "Generating…",
+        "draft": "Awaiting approval",
+        "approved": "Approved",
+        "dismissed": "Dismissed",
+        "error": "Failed",
+    }
+
+
+def test_score_summary_labels_judged_as_ai_and_tolerates_gaps(node_available):
+    script = textwrap.dedent("""
+        const { scoreSummary } = await import('./static/js/projectsLogic.js');
+        console.log(JSON.stringify({
+          full: scoreSummary({
+            grounded: { technical_readiness: 72, recent_activity: 40, _signals: {} },
+            judged: { monetisation_clarity: 55, marketability: 60 },
+          }),
+          groundedOnly: scoreSummary({
+            grounded: { technical_readiness: 10, recent_activity: 0, _signals: {} },
+            judged: {},
+          }),
+          empty: scoreSummary({}),
+          nullish: scoreSummary(null),
+        }));
+    """)
+    out = _run_node(script)
+    assert out["full"] == (
+        "Technical 72 · Activity 40 · AI judgement: Monetisation 55 · Marketability 60"
+    )
+    assert out["groundedOnly"] == "Technical 10 · Activity 0"
+    assert out["empty"] == ""
+    assert out["nullish"] == ""
+
+
+def test_newly_drafted_detects_running_to_draft_transition(node_available):
+    script = textwrap.dedent("""
+        const { newlyDrafted } = await import('./static/js/projectsLogic.js');
+        console.log(JSON.stringify({
+          landed: newlyDrafted(['r1', 'r2'], [
+            { id: 'r1', status: 'draft' },      // finished — report it
+            { id: 'r2', status: 'running' },    // still going
+            { id: 'r3', status: 'draft' },      // was never tracked as running
+          ]),
+          errored: newlyDrafted(['r1'], [{ id: 'r1', status: 'error' }]),
+          empty: newlyDrafted([], [{ id: 'r1', status: 'draft' }]),
+        }));
+    """)
+    out = _run_node(script)
+    assert out["landed"] == ["r1"]
+    assert out["errored"] == []
+    assert out["empty"] == []
 
 
 def test_sort_projects_alphabetical_missing_last(node_available):

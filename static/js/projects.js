@@ -1,18 +1,24 @@
 // ============================================
-// Projects tab — auto-discovered local code projects (Agent Council Phase 1)
-// Grid of projects with stack chips, staleness badge, Index / Archive actions.
+// Projects tab — auto-discovered local code projects (Agent Council Phases 1–2)
+// Grid of projects with stack chips, staleness badge, Index / Deep Index /
+// Developer Review / Archive actions, plus the council-report approval queue.
 // Modal shell lives in index.html (#projects-modal); this module renders into it.
 // ============================================
 import uiModule from './ui.js';
-import { projectStatusBadge, sortProjects } from './projectsLogic.js';
+import { newlyDrafted, projectStatusBadge, reportChip, scoreSummary, sortProjects } from './projectsLogic.js';
 
 const esc = uiModule.esc;
 let _projects = [];
+let _reports = [];
 let _busy = new Set();
 let _deepBusy = new Set();
+let _reviewBusy = new Set();   // optimistic — covers the gap until the running row arrives
+let _openBodies = new Set();
+let _reportPollTimer = null;
 
 const _modal = () => document.getElementById('projects-modal');
 const _grid = () => document.getElementById('projects-grid');
+const _reportsBox = () => document.getElementById('council-reports');
 
 const _fetchProjects = async () => {
   const res = await fetch('/api/projects');
@@ -27,6 +33,8 @@ const _card = (p) => {
     .join('');
   const busy = _busy.has(p.id);
   const deepBusy = _deepBusy.has(p.id);
+  const reviewRunning = _reviewBusy.has(p.id)
+    || _reports.some((r) => r.project_id === p.id && r.status === 'running');
   const summary = p.deep_summary
     ? `<details class="proj-summary"><summary>Summary</summary><div class="proj-summary-body">${esc(p.deep_summary)}</div></details>`
     : '';
@@ -45,6 +53,9 @@ const _card = (p) => {
         <button class="memory-toolbar-btn" data-action="deep-index" ${deepBusy || !p.exists ? 'disabled' : ''}>
           ${deepBusy ? 'Summarising…' : 'Deep Index'}
         </button>
+        <button class="memory-toolbar-btn" data-action="review" ${reviewRunning || !p.exists ? 'disabled' : ''}>
+          ${reviewRunning ? 'Reviewing…' : 'Developer Review'}
+        </button>
         <button class="memory-toolbar-btn" data-action="archive">Archive</button>
       </div>
     </div>`;
@@ -61,10 +72,83 @@ const _render = () => {
   grid.innerHTML = sortProjects(_projects).map(_card).join('');
 };
 
+const _reportRow = (r) => {
+  const chip = reportChip(r);
+  const summary = scoreSummary(r.scores);
+  const isDraft = r.status === 'draft';
+  const open = _openBodies.has(r.id);
+  return `
+    <div class="report-row admin-card" data-report-id="${esc(r.id)}">
+      <div class="proj-card-head">
+        <span class="proj-name">${esc(r.title || 'Report')}</span>
+        <span class="proj-badge ${chip.cls}${r.status === 'running' ? ' report-chip-running' : ''}">${esc(chip.label)}</span>
+      </div>
+      ${summary ? `<div class="memory-desc report-scores">${esc(summary)}</div>` : ''}
+      ${r.status === 'error' ? `<div class="memory-desc report-scores">${esc(r.error || 'unknown error')}</div>` : ''}
+      <div class="proj-actions">
+        ${r.status !== 'running' && r.status !== 'error'
+          ? `<button class="memory-toolbar-btn" data-action="toggle-body">${open ? 'Hide' : 'View'}</button>` : ''}
+        ${isDraft ? `<button class="memory-toolbar-btn" data-action="approve">Approve</button>` : ''}
+        ${isDraft ? `<button class="memory-toolbar-btn" data-action="dismiss">Dismiss</button>` : ''}
+      </div>
+      ${open ? `<div class="report-body" data-body-for="${esc(r.id)}">Loading…</div>` : ''}
+    </div>`;
+};
+
+const _renderReports = () => {
+  const box = _reportsBox();
+  if (!box) return;
+  if (!_reports.length) {
+    box.innerHTML = '<p class="memory-desc">No reports yet — run a Developer Review on a project above.</p>';
+    return;
+  }
+  box.innerHTML = _reports.map(_reportRow).join('');
+  _openBodies.forEach((rid) => _loadBody(rid));
+};
+
+const _loadBody = async (rid) => {
+  const el = document.querySelector(`[data-body-for="${rid}"]`);
+  if (!el) return;
+  try {
+    const res = await fetch(`/api/council/reports/${rid}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `report fetch failed (${res.status})`);
+    el.textContent = data.body || '(empty report)';
+  } catch (e) {
+    el.textContent = `Failed to load report: ${e.message}`;
+  }
+};
+
+const _fetchReports = async () => {
+  const res = await fetch('/api/council/reports');
+  if (!res.ok) throw new Error(`reports list failed (${res.status})`);
+  const prevRunning = _reports.filter((r) => r.status === 'running').map((r) => r.id);
+  _reports = (await res.json()).reports || [];
+  newlyDrafted(prevRunning, _reports).forEach(() =>
+    uiModule.showToast('Developer Review ready — awaiting your approval below'));
+};
+
+// While a report is generating, keep the queue fresh (only while modal open).
+const _scheduleReportPoll = () => {
+  clearTimeout(_reportPollTimer);
+  if (!isOpen() || !_reports.some((r) => r.status === 'running')) return;
+  _reportPollTimer = setTimeout(async () => {
+    try {
+      await _fetchReports();
+      _render();
+      _renderReports();
+    } catch (_) { /* transient — next poll retries */ }
+    _scheduleReportPoll();
+  }, 5000);
+};
+
 const _refresh = async () => {
   try {
     await _fetchProjects();
+    await _fetchReports();
     _render();
+    _renderReports();
+    _scheduleReportPoll();
   } catch (e) {
     uiModule.showError(`Projects: ${e.message}`);
   }
@@ -135,6 +219,39 @@ const _deepIndex = async (pid) => {
   }
 };
 
+const _review = async (pid) => {
+  _reviewBusy.add(pid);
+  _render();
+  try {
+    const res = await fetch('/api/council/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: pid }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `review failed (${res.status})`);
+    uiModule.showToast('Developer Review generating — it will land below as a draft');
+    await _refresh();
+  } catch (e) {
+    uiModule.showError(`Review: ${e.message}`);
+  } finally {
+    _reviewBusy.delete(pid);
+    _render();
+  }
+};
+
+const _reportAction = async (rid, action) => {
+  try {
+    const res = await fetch(`/api/council/reports/${rid}/${action}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `${action} failed (${res.status})`);
+    uiModule.showToast(`Report ${data.status}`);
+    await _refresh();
+  } catch (e) {
+    uiModule.showError(`Report: ${e.message}`);
+  }
+};
+
 const _archive = async (pid) => {
   try {
     const res = await fetch(`/api/projects/${pid}`, { method: 'DELETE' });
@@ -159,7 +276,21 @@ const _wire = () => {
     if (!pid) return;
     if (btn.dataset.action === 'index') _index(pid);
     if (btn.dataset.action === 'deep-index') _deepIndex(pid);
+    if (btn.dataset.action === 'review') _review(pid);
     if (btn.dataset.action === 'archive') _archive(pid);
+  });
+  // Delegated handler for the approval queue (CSP-safe, survives re-renders).
+  _reportsBox()?.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button[data-action]');
+    if (!btn) return;
+    const rid = btn.closest('[data-report-id]')?.dataset.reportId;
+    if (!rid) return;
+    if (btn.dataset.action === 'approve') _reportAction(rid, 'approve');
+    if (btn.dataset.action === 'dismiss') _reportAction(rid, 'dismiss');
+    if (btn.dataset.action === 'toggle-body') {
+      if (_openBodies.has(rid)) _openBodies.delete(rid); else _openBodies.add(rid);
+      _renderReports();
+    }
   });
 };
 
@@ -171,7 +302,10 @@ export const open = () => {
   _refresh();
 };
 
-export const close = () => _modal()?.classList.add('hidden');
+export const close = () => {
+  clearTimeout(_reportPollTimer);
+  _modal()?.classList.add('hidden');
+};
 export const isOpen = () => !!_modal() && !_modal().classList.contains('hidden');
 
 export default { open, close, isOpen };
