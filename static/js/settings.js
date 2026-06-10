@@ -7,6 +7,7 @@ import { makeWindowDraggable } from './windowDrag.js';
 import { clearDockSide } from './modalSnap.js';
 import { sortModelIds } from './modelSort.js';
 import { isAltGrEvent } from './platform.js';
+import { normalizeRoots } from './projectsLogic.js';
 
 let initialized = false;
 let modalEl = null;
@@ -2155,6 +2156,86 @@ function initAll() {
   initEmailAccountsSettings();
   initReminderSettings();
   initUnifiedIntegrations();
+  initProjectsSettings();
+}
+
+/* ── Projects tab — workspace roots (admin) ── */
+function initProjectsSettings() {
+  const list = el('set-projects-roots-list');
+  const input = el('set-projects-root-input');
+  const addBtn = el('set-projects-root-add');
+  if (!list || !input || !addBtn) return;
+  let roots = [];
+
+  async function load() {
+    try {
+      const res = await fetch('/api/auth/settings', { credentials: 'same-origin' });
+      const s = await res.json();
+      roots = normalizeRoots(s.projects_workspace_roots || []);
+      render();
+    } catch (e) { console.warn('[projects] settings load failed', e); }
+  }
+
+  async function save() {
+    try {
+      const res = await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projects_workspace_roots: roots })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      uiModule.showToast('Workspace roots saved');
+    } catch (e) {
+      uiModule.showError('Saving workspace roots failed: ' + e.message);
+    }
+  }
+
+  function render() {
+    list.innerHTML = '';
+    if (!roots.length) {
+      const empty = document.createElement('div');
+      empty.className = 'admin-toggle-sub';
+      empty.textContent = 'No roots configured yet — add a folder below.';
+      list.appendChild(empty);
+      return;
+    }
+    roots.forEach((r, idx) => {
+      const row = document.createElement('div');
+      row.className = 'settings-row';
+      row.style.gap = '6px';
+      const path = document.createElement('code');
+      path.textContent = r;
+      path.style.flex = '1';
+      path.style.overflow = 'hidden';
+      path.style.textOverflow = 'ellipsis';
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'admin-btn-sm';
+      rm.textContent = 'Remove';
+      rm.addEventListener('click', () => {
+        roots.splice(idx, 1);
+        render();
+        save();
+      });
+      row.appendChild(path);
+      row.appendChild(rm);
+      list.appendChild(row);
+    });
+  }
+
+  function add() {
+    const next = normalizeRoots(roots.concat(input.value));
+    input.value = '';
+    if (next.length === roots.length) return; // empty or duplicate
+    roots = next;
+    render();
+    save();
+  }
+
+  addBtn.addEventListener('click', add);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); add(); }
+  });
+  load();
 }
 
 function notifyIntegrationsChanged() {

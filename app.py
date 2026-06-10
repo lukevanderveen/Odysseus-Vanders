@@ -684,6 +684,10 @@ logger.info("Webhook & API token routes initialized")
 from routes.note_routes import setup_note_routes
 app.include_router(setup_note_routes(task_scheduler))
 
+# Projects (Agent Council Projects tab — workspace scan + per-project RAG index)
+from routes.project_routes import setup_project_routes
+app.include_router(setup_project_routes())
+
 # Email
 from routes.email_routes import setup_email_routes
 app.include_router(setup_email_routes())
@@ -736,6 +740,10 @@ async def serve_cookbook(request: Request):
 
 @app.get("/email")
 async def serve_email(request: Request):
+    return await serve_index(request)
+
+@app.get("/projects")
+async def serve_projects(request: Request):
     return await serve_index(request)
 
 @app.get("/memory")

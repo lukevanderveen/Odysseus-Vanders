@@ -33,7 +33,9 @@ services/data/
 
 # IDE / Editor
 .aider*
-.claude/
+.claude/*
+!.claude/settings.json
+.claude/settings.local.json
 .vscode/
 .idea/
 *.swp

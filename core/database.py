@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, Text, Boolean, DateTime, Integer, ForeignKey, JSON, Index, func, text
+from sqlalchemy import create_engine, Column, String, Text, Boolean, DateTime, Integer, ForeignKey, JSON, Index, UniqueConstraint, func, text
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import relationship, sessionmaker, backref
@@ -1360,6 +1360,32 @@ class Note(TimestampMixin, Base):
     # Chat session spawned by the note's "Agent" button (solve-this-todo).
     # The note shows a clickable tag that opens this session for review.
     agent_session_id  = Column(String, nullable=True)
+
+
+class Project(TimestampMixin, Base):
+    """A discovered local code project (Agent Council Projects tab).
+
+    Rows are upserted by the workspace scan; index/deep-index runs stamp the
+    *_ref columns with the git HEAD sha (or mtime fingerprint) so staleness is
+    computed at list time, never stored. See services/projects/scanner.py.
+    """
+    __tablename__ = "projects"
+    __table_args__ = (UniqueConstraint("owner", "path", name="uq_project_owner_path"),)
+
+    id    = Column(String, primary_key=True, index=True)
+    owner = Column(String, nullable=True, index=True)
+    name  = Column(String, nullable=False)
+    path  = Column(String, nullable=False)
+    stack = Column(Text, nullable=True)            # JSON list of stack tags
+
+    indexed_at = Column(DateTime, nullable=True)   # last RAG index into project_{id}
+    index_ref  = Column(String, nullable=True)     # ref stamped at index time
+
+    deep_summary    = Column(Text, nullable=True)  # agent structural summary
+    deep_indexed_at = Column(DateTime, nullable=True)
+    deep_index_ref  = Column(String, nullable=True)
+
+    archived = Column(Boolean, default=False)
 
 
 class CalendarCal(TimestampMixin, Base):

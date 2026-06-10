@@ -36,6 +36,7 @@ import themeModule from './js/theme.js';
 // _envState objects), which broke server selection. Keep all cookbook imports
 // unversioned so this can't recur.
 import cookbookModule from './js/cookbook.js';
+import projectsModule from './js/projects.js';
 import groupModule from './js/group.js';
 import * as researchPanelModule from './js/research/panel.js';
 import ttsModule from './js/tts-ai.js';
@@ -804,6 +805,18 @@ function initializeEventListeners() {
     });
   }
 
+  // Projects modal toggle
+  const toolProjectsBtn = el('tool-projects-btn');
+  if (toolProjectsBtn) {
+    toolProjectsBtn.addEventListener('click', async () => {
+      if (!projectsModule) return;
+      const Modals = await import('./js/modalManager.js');
+      if (!Modals.toggle('projects-modal')) {
+        projectsModule.isOpen() ? projectsModule.close() : projectsModule.open();
+      }
+    });
+  }
+
   // Document library tool button
   const toolDoclibBtn = el('tool-doclib-btn');
   if (toolDoclibBtn) {
@@ -1001,6 +1014,7 @@ function initializeEventListeners() {
     '/gallery':  () => document.getElementById('tool-gallery-btn')?.click(),
     '/tasks':    () => document.getElementById('tool-tasks-btn')?.click(),
     '/library':  () => sessionModule && sessionModule.openLibrary && sessionModule.openLibrary(),
+    '/projects': () => document.getElementById('tool-projects-btn')?.click(),
   };
   const _opener = _routeOpen[urlPath];
   // Defer the opener — at this point in init, the modules whose handlers

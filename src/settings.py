@@ -39,6 +39,9 @@ DEFAULT_SETTINGS = {
     # Public base URL used to build clickable deep-links in outgoing alerts
     # (e.g., urgency alert email). Example: "https://chat.example.com"
     "app_public_url": "",
+    # Workspace roots the Projects tab scans for local code projects. Admin
+    # allowlist — the scan endpoint never accepts caller-supplied paths.
+    "projects_workspace_roots": [],
     "tts_enabled": True,
     "tts_provider": "disabled",
     "tts_model": "tts-1",
