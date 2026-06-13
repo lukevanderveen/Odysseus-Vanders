@@ -28,8 +28,16 @@ from services.council.scoring import grounded_scores, parse_judged_scores
 logger = logging.getLogger(__name__)
 
 # One report at a time: summaries and reviews serialise on a single GPU.
-# Phase 3 widens this per-endpoint (cloud models may run 2–3 in parallel).
+# Queue state is introspectable for the council dashboard (Busy/Waiting/Ready).
 _run_semaphore = asyncio.Semaphore(1)
+_queued: list = []          # report ids waiting on the semaphore, FIFO
+_current: Optional[str] = None
+
+
+def queue_state() -> Dict:
+    """Snapshot for /api/council/status: the running report id and the ids
+    still waiting, in queue order."""
+    return {"running": _current, "queued": list(_queued)}
 
 _PACKAGED_TEMPLATE_DIR = Path(__file__).parent / "report_types"
 
@@ -167,13 +175,22 @@ async def run_report(
         grounded = grounded_scores(project.path)
         messages = build_messages(report, project, grounded, retrieve)
 
+        global _current
+        _queued.append(report_id)
         try:
             async with _run_semaphore:
-                if complete is None:
-                    raw = await _default_complete(messages, owner=owner)
-                else:
-                    raw = await complete(messages)
+                _queued.remove(report_id)
+                _current = report_id
+                try:
+                    if complete is None:
+                        raw = await _default_complete(messages, owner=owner)
+                    else:
+                        raw = await complete(messages)
+                finally:
+                    _current = None
         except Exception as e:
+            if report_id in _queued:   # failed before the semaphore was acquired
+                _queued.remove(report_id)
             logger.warning("Report %s failed: %s", report_id, e)
             _finish(db, report, status="error", error=str(e))
             notify(task_name=title, status="failed", task_id=report_id, owner=owner)

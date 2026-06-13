@@ -93,31 +93,6 @@ def test_report_chip_covers_all_statuses(node_available):
     }
 
 
-def test_score_summary_labels_judged_as_ai_and_tolerates_gaps(node_available):
-    script = textwrap.dedent("""
-        const { scoreSummary } = await import('./static/js/projectsLogic.js');
-        console.log(JSON.stringify({
-          full: scoreSummary({
-            grounded: { technical_readiness: 72, recent_activity: 40, _signals: {} },
-            judged: { monetisation_clarity: 55, marketability: 60 },
-          }),
-          groundedOnly: scoreSummary({
-            grounded: { technical_readiness: 10, recent_activity: 0, _signals: {} },
-            judged: {},
-          }),
-          empty: scoreSummary({}),
-          nullish: scoreSummary(null),
-        }));
-    """)
-    out = _run_node(script)
-    assert out["full"] == (
-        "Technical 72 · Activity 40 · AI judgement: Monetisation 55 · Marketability 60"
-    )
-    assert out["groundedOnly"] == "Technical 10 · Activity 0"
-    assert out["empty"] == ""
-    assert out["nullish"] == ""
-
-
 def test_newly_drafted_detects_running_to_draft_transition(node_available):
     script = textwrap.dedent("""
         const { newlyDrafted } = await import('./static/js/projectsLogic.js');

@@ -16,17 +16,21 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from core.database import Project, Report, SessionLocal
-from services.council.runner import run_report
+from core.database import CrewMember, Project, Report, SessionLocal
+from services.council.personas import seed_council_members
+from services.council.runner import queue_state, run_report
 from src.auth_helpers import get_current_user
 
 logger = logging.getLogger(__name__)
 
-# Allowed report types → (department, title prefix). Phase 3 adds the rest of
-# the departments; the allowlist is the guard because report_type names a
-# template file on disk.
+# Allowed report types → (department, title prefix). The allowlist is the
+# guard because report_type names a template file on disk.
 REPORT_TYPES = {
     "developer_review": ("developer", "Developer Review"),
+    "market_opportunity": ("research", "Market Opportunity Report"),
+    "launch_strategy": ("business", "Launch Strategy"),
+    "architecture_review": ("architect", "Architecture Review"),
+    "marketing_audit": ("marketing", "Marketing Audit"),
 }
 
 VALID_TRANSITIONS = {"approve": "approved", "dismiss": "dismissed"}
@@ -153,6 +157,53 @@ def setup_council_routes():
             report.status = VALID_TRANSITIONS[action]
             db.commit()
             return {"id": rid, "status": report.status}
+        finally:
+            db.close()
+
+    @router.get("/status")
+    def council_status(request: Request):
+        user = _owner(request)
+        # First council use seeds the five default members (idempotent).
+        seed_council_members(user, session_factory=SessionLocal)
+
+        state = queue_state()
+        db = SessionLocal()
+        try:
+            # Departments of the running/queued reports, owner-scoped so one
+            # user's queue never leaks into another's dashboard.
+            ids = [i for i in [state["running"], *state["queued"]] if i]
+            q = db.query(Report).filter(Report.id.in_(ids)) if ids else []
+            if ids and user is not None:
+                q = q.filter(Report.owner == user)
+            dept_of = {r.id: r.department for r in q}
+
+            queue_position = {}
+            for pos, rid in enumerate(state["queued"], start=1):
+                if rid in dept_of:
+                    queue_position.setdefault(dept_of[rid], pos)
+
+            mq = db.query(CrewMember).filter(CrewMember.department.isnot(None))
+            if user is not None:
+                mq = mq.filter(CrewMember.owner == user)
+            members = []
+            running_dept = dept_of.get(state["running"])
+            for m in mq.order_by(CrewMember.name).all():
+                if m.department == running_dept:
+                    status, current = "Busy", state["running"]
+                else:
+                    status, current = "Ready", None
+                pos = queue_position.get(m.department)
+                if status == "Ready" and pos:
+                    status = "Waiting"
+                members.append({
+                    "department": m.department,
+                    "name": m.name,
+                    "avatar": m.avatar,
+                    "status": status,
+                    "current_report_id": current,
+                    "queue_position": pos,
+                })
+            return {"members": members}
         finally:
             db.close()
 

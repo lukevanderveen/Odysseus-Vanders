@@ -35047,3 +35047,110 @@ body.theme-frosted .modal {
 .report-body { white-space: pre-wrap; max-height: 360px; overflow-y: auto; padding: 8px 6px; font-size: 12px; opacity: 0.9; border-top: 1px solid var(--border); }
 .report-chip-running { animation: report-chip-pulse 1.6s ease-in-out infinite; }
 @keyframes report-chip-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ── Council dashboard (Agent Council Phase 3) ────────────────────────── */
+.council-tabs { display: flex; gap: 6px; }
+.council-tabs .memory-toolbar-btn.active { border-color: var(--fg); color: var(--fg); }
+.council-chip-ready { color: #5dbf6e; border-color: color-mix(in srgb, #5dbf6e 50%, transparent); }
+.council-chip-waiting { color: #d9a13b; border-color: color-mix(in srgb, #d9a13b 50%, transparent); }
+.council-chip-busy { color: #5b8abf; border-color: color-mix(in srgb, #5b8abf 50%, transparent); }
+.council-run-form { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 2px; }
+.council-run-form select { max-width: 240px; }
+.council-history-bar { padding: 8px 2px 0; }
+.council-history-bar select { max-width: 240px; }
+
+/* Department accent: member cards + report rows carry --dept-color. */
+.council-member { border-left: 3px solid var(--dept-color, var(--fg)); }
+.council-avatar {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  color: var(--dept-color, var(--fg));
+  background: color-mix(in srgb, var(--dept-color, var(--fg)) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dept-color, var(--fg)) 45%, transparent);
+}
+.council-dept { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dept-color, var(--fg)); opacity: 0.85; }
+
+/* Atlas-style labelled score bars: grounded solid, judged hatched + AI tag. */
+.score-bars { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
+.score-bar-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.score-bar-label { width: 170px; flex-shrink: 0; opacity: 0.75; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.score-bar-track { flex: 1; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--fg) 10%, transparent); overflow: hidden; }
+.score-bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--dept-color, var(--fg)); transition: width 0.4s ease; }
+.score-bar-fill.judged {
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--dept-color, var(--fg)) 75%, transparent) 0 4px,
+    color-mix(in srgb, var(--dept-color, var(--fg)) 30%, transparent) 4px 8px
+  );
+}
+.score-bar-val { width: 26px; text-align: right; font-variant-numeric: tabular-nums; opacity: 0.85; flex-shrink: 0; }
+.score-ai-tag { font-size: 8px; padding: 0 4px; border-radius: 6px; border: 1px solid currentColor; opacity: 0.7; flex-shrink: 0; }
+
+/* ── Office view (Agent Council Phase 4) ──────────────────────────────── */
+.office-canvas {
+  position: relative; height: 380px; margin: 8px 2px; border-radius: 10px;
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--fg) 6%, transparent), transparent 70%),
+    color-mix(in srgb, var(--fg) 3%, transparent);
+  overflow: hidden;
+}
+.office-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.office-lines line { stroke: color-mix(in srgb, var(--fg) 18%, transparent); stroke-width: 0.3; stroke-dasharray: 1.2 1.2; }
+.office-node {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 10px; cursor: pointer;
+  background: var(--bg);
+  border: 1px solid color-mix(in srgb, var(--dept-color, var(--fg)) 45%, transparent);
+  border-left: 3px solid var(--dept-color, var(--fg));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--dept-color, var(--fg)) 12%, transparent);
+  max-width: 230px;
+}
+.office-node:hover { border-color: var(--dept-color, var(--fg)); }
+.office-node-text { display: flex; flex-direction: column; min-width: 0; }
+.office-node-name { font-weight: 600; font-size: 12px; white-space: nowrap; }
+.office-node-detail { font-size: 10px; opacity: 0.65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+.office-hub {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 84px; height: 84px; border-radius: 50%; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--fg); font-weight: 700; letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--fg) 10%, var(--bg));
+  border: 2px solid color-mix(in srgb, var(--fg) 55%, transparent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--fg) 25%, transparent);
+}
+.office-hub:hover { border-color: var(--fg); }
+.office-hub-count {
+  font-size: 11px; min-width: 18px; padding: 1px 5px; border-radius: 9px;
+  background: var(--fg); color: var(--bg);
+}
+.office-hint { margin: 0 2px; }
+
+/* ── Project Command Centre (Agent Council Phase 4) ───────────────────── */
+.cc-modal-content { width: min(640px, 92vw); max-height: 86vh; display: flex; flex-direction: column; }
+.cc-modal-body { display: flex; flex: 1; min-height: 0; }
+.cc-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.cc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.cc-title { margin: 0 0 4px; padding: 0; line-height: 1.1; }
+.cc-score { display: flex; align-items: baseline; gap: 2px; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; max-width: 160px; }
+.cc-score-num { font-size: 42px; font-weight: 800; line-height: 1; color: var(--fg); font-variant-numeric: tabular-nums; }
+.cc-score-denom { font-size: 16px; opacity: 0.55; font-weight: 600; }
+.cc-score-hint { width: 100%; text-align: right; font-size: 10px; opacity: 0.6; }
+.cc-section { margin: 10px 0 2px; padding: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+.cc-warn { color: #d9a13b; }
+.cc-report {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  border: 1px solid var(--border); border-left: 3px solid var(--dept-color, var(--fg));
+  border-radius: 8px;
+}
+.cc-report-date { font-size: 10px; opacity: 0.6; white-space: nowrap; }
+
+/* Project card name doubles as the Command Centre opener. */
+.proj-name-btn {
+  background: none; border: none; padding: 0; cursor: pointer; text-align: left;
+  color: inherit; font: inherit; font-weight: 600; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+.proj-name-btn:hover { color: var(--fg); text-decoration: underline; }

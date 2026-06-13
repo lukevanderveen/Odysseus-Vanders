@@ -31,7 +31,12 @@ _SOURCE_SUFFIXES = {
 
 _TODO_RE = re.compile(r"\b(TODO|FIXME|XXX|HACK)\b")
 
-JUDGED_KEYS = ("monetisation_clarity", "marketability")
+# The judged (LLM-opinion) dimensions any report type may return; each
+# template asks for the subset that fits its department.
+JUDGED_KEYS = (
+    "monetisation_clarity", "marketability",
+    "launch_readiness", "ai_automation_potential",
+)
 
 
 def _iter_files(root: Path):

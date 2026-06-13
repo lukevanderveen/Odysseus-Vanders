@@ -36,9 +36,9 @@ def _import_real(*names, force=()):
         sys.modules.update(saved)
 
 
-_sa, _sa_orm, _sa_pool, _coredb, cr = _import_real(
+_sa, _sa_orm, _sa_pool, _coredb, _runner, cr = _import_real(
     "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.pool",
-    "core.database", "routes.council_routes",
+    "core.database", "services.council.runner", "routes.council_routes",
     force=("core.database", "routes.council_routes",
            "services.council.runner"),
 )
@@ -48,6 +48,7 @@ StaticPool = _sa_pool.StaticPool
 Base = _coredb.Base
 Project = _coredb.Project
 Report = _coredb.Report
+CrewMember = _coredb.CrewMember
 
 
 @pytest.fixture()
@@ -116,6 +117,34 @@ def test_create_report_404_for_foreign_project(env):
     res = client.post("/api/council/reports", json={"project_id": "p2"})
     assert res.status_code == 404
     assert launched == []
+
+
+def test_report_type_registry_covers_all_departments_with_templates():
+    assert set(cr.REPORT_TYPES) == {
+        "developer_review", "market_opportunity", "launch_strategy",
+        "architecture_review", "marketing_audit",
+    }
+    departments = set()
+    for report_type, (department, title) in cr.REPORT_TYPES.items():
+        departments.add(department)
+        assert title
+        template = _runner.load_template(report_type)  # must exist on disk
+        for token in ("{project_name}", "{grounded_scores}", "{deep_summary}", "{rag_snippets}"):
+            assert token in template, f"{report_type} template missing {token}"
+    assert departments == {"research", "business", "architect", "developer", "marketing"}
+
+
+def test_create_launch_strategy_report_maps_to_business(env):
+    client, TestSession, _, launched = env
+    res = client.post("/api/council/reports",
+                      json={"project_id": "p1", "report_type": "launch_strategy"})
+    assert res.status_code == 200
+    db = TestSession()
+    row = db.get(Report, res.json()["report_id"])
+    assert row.department == "business"
+    assert row.report_type == "launch_strategy"
+    assert "Launch Strategy" in row.title
+    db.close()
 
 
 def test_create_report_rejects_unknown_report_type(env):
@@ -201,3 +230,44 @@ def test_approve_404_for_foreign_report(env):
     client, TestSession, _, _ = env
     _insert_report(TestSession, id="r3", owner="other", project_id="p2")
     assert client.post("/api/council/reports/r3/approve").status_code == 404
+
+
+def test_status_seeds_personas_and_reports_all_ready_when_idle(env, monkeypatch):
+    client, TestSession, _, _ = env
+    monkeypatch.setattr(cr, "queue_state", lambda: {"running": None, "queued": []})
+    res = client.get("/api/council/status")
+    assert res.status_code == 200
+    members = res.json()["members"]
+    assert {m["department"] for m in members} == {
+        "research", "business", "architect", "developer", "marketing",
+    }
+    assert all(m["status"] == "Ready" for m in members)
+    assert all(m["name"] for m in members)
+
+    db = TestSession()
+    assert (db.query(CrewMember)
+            .filter(CrewMember.owner == "vanders",
+                    CrewMember.department.isnot(None)).count()) == 5
+    db.close()
+    # second call must not re-seed
+    client.get("/api/council/status")
+    db = TestSession()
+    assert db.query(CrewMember).count() == 5
+    db.close()
+
+
+def test_status_derives_busy_and_waiting_from_queue(env, monkeypatch):
+    client, TestSession, _, _ = env
+    _insert_report(TestSession, id="run1", status="running",
+                   department="developer", report_type="developer_review")
+    _insert_report(TestSession, id="q1", status="running",
+                   department="business", report_type="launch_strategy")
+    monkeypatch.setattr(cr, "queue_state",
+                        lambda: {"running": "run1", "queued": ["q1"]})
+    members = {m["department"]: m for m in
+               client.get("/api/council/status").json()["members"]}
+    assert members["developer"]["status"] == "Busy"
+    assert members["developer"]["current_report_id"] == "run1"
+    assert members["business"]["status"] == "Waiting"
+    assert members["business"]["queue_position"] == 1
+    assert members["research"]["status"] == "Ready"

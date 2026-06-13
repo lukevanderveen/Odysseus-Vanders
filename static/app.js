@@ -37,6 +37,7 @@ import themeModule from './js/theme.js';
 // unversioned so this can't recur.
 import cookbookModule from './js/cookbook.js';
 import projectsModule from './js/projects.js';
+import councilModule from './js/council.js';
 import groupModule from './js/group.js';
 import * as researchPanelModule from './js/research/panel.js';
 import ttsModule from './js/tts-ai.js';
@@ -817,6 +818,18 @@ function initializeEventListeners() {
     });
   }
 
+  // Council modal toggle
+  const toolCouncilBtn = el('tool-council-btn');
+  if (toolCouncilBtn) {
+    toolCouncilBtn.addEventListener('click', async () => {
+      if (!councilModule) return;
+      const Modals = await import('./js/modalManager.js');
+      if (!Modals.toggle('council-modal')) {
+        councilModule.isOpen() ? councilModule.close() : councilModule.open();
+      }
+    });
+  }
+
   // Document library tool button
   const toolDoclibBtn = el('tool-doclib-btn');
   if (toolDoclibBtn) {
@@ -1015,6 +1028,7 @@ function initializeEventListeners() {
     '/tasks':    () => document.getElementById('tool-tasks-btn')?.click(),
     '/library':  () => sessionModule && sessionModule.openLibrary && sessionModule.openLibrary(),
     '/projects': () => document.getElementById('tool-projects-btn')?.click(),
+    '/council': () => document.getElementById('tool-council-btn')?.click(),
   };
   const _opener = _routeOpen[urlPath];
   // Defer the opener — at this point in init, the modules whose handlers

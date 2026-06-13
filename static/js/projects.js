@@ -5,7 +5,9 @@
 // Modal shell lives in index.html (#projects-modal); this module renders into it.
 // ============================================
 import uiModule from './ui.js';
-import { newlyDrafted, projectStatusBadge, reportChip, scoreSummary, sortProjects } from './projectsLogic.js';
+import { newlyDrafted, projectStatusBadge, reportChip, sortProjects } from './projectsLogic.js';
+import { scoreBarsHtml } from './councilLogic.js';
+import { openCommandCentre, wireCommandCentre } from './councilOffice.js';
 
 const esc = uiModule.esc;
 let _projects = [];
@@ -41,7 +43,7 @@ const _card = (p) => {
   return `
     <div class="proj-card admin-card" data-project-id="${esc(p.id)}">
       <div class="proj-card-head">
-        <span class="proj-name" title="${esc(p.path)}">${esc(p.name)}</span>
+        <button class="proj-name proj-name-btn" data-action="command-centre" title="Open Command Centre — ${esc(p.path)}">${esc(p.name)}</button>
         <span class="proj-badge ${badge.cls}">${esc(badge.label)}</span>
       </div>
       <div class="proj-chips">${chips}</div>
@@ -74,7 +76,6 @@ const _render = () => {
 
 const _reportRow = (r) => {
   const chip = reportChip(r);
-  const summary = scoreSummary(r.scores);
   const isDraft = r.status === 'draft';
   const open = _openBodies.has(r.id);
   return `
@@ -83,7 +84,7 @@ const _reportRow = (r) => {
         <span class="proj-name">${esc(r.title || 'Report')}</span>
         <span class="proj-badge ${chip.cls}${r.status === 'running' ? ' report-chip-running' : ''}">${esc(chip.label)}</span>
       </div>
-      ${summary ? `<div class="memory-desc report-scores">${esc(summary)}</div>` : ''}
+      ${scoreBarsHtml(r.scores, esc)}
       ${r.status === 'error' ? `<div class="memory-desc report-scores">${esc(r.error || 'unknown error')}</div>` : ''}
       <div class="proj-actions">
         ${r.status !== 'running' && r.status !== 'error'
@@ -148,9 +149,10 @@ const _refresh = async () => {
     await _fetchReports();
     _render();
     _renderReports();
-    _scheduleReportPoll();
   } catch (e) {
     uiModule.showError(`Projects: ${e.message}`);
+  } finally {
+    _scheduleReportPoll();   // a transient error must never kill the poll loop
   }
 };
 
@@ -278,6 +280,13 @@ const _wire = () => {
     if (btn.dataset.action === 'deep-index') _deepIndex(pid);
     if (btn.dataset.action === 'review') _review(pid);
     if (btn.dataset.action === 'archive') _archive(pid);
+    if (btn.dataset.action === 'command-centre') {
+      const project = _projects.find((p) => p.id === pid);
+      if (project) {
+        wireCommandCentre();
+        openCommandCentre(project, _reports);
+      }
+    }
   });
   // Delegated handler for the approval queue (CSP-safe, survives re-renders).
   _reportsBox()?.addEventListener('click', (ev) => {

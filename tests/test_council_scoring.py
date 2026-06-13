@@ -158,3 +158,16 @@ def test_parse_judged_scores_clamps_and_drops_unknown():
 
 def test_parse_judged_scores_drops_non_numeric():
     assert parse_judged_scores('{"monetisation_clarity": "high"}') == {}
+
+
+def test_parse_judged_scores_accepts_all_council_dimensions():
+    out = parse_judged_scores(
+        '{"monetisation_clarity": 50, "marketability": 60, '
+        '"launch_readiness": 30, "ai_automation_potential": 80}'
+    )
+    assert out == {
+        "monetisation_clarity": 50,
+        "marketability": 60,
+        "launch_readiness": 30,
+        "ai_automation_potential": 80,
+    }

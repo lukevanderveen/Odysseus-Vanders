@@ -69,12 +69,28 @@ class McpManager:
             self._connections[server_id] = {"status": "error", "error": error_message, "name": name}
             return False
 
+    @staticmethod
+    async def _aclose_quietly(stack) -> None:
+        """Tear down a transport stack, swallowing teardown errors.
+
+        Must be awaited in the same task that entered the stack: ``stdio_client``
+        opens an anyio task group, and closing it from another task (e.g. when the
+        GC finalizes a stack abandoned on the failure path) raises
+        'Attempted to exit cancel scope in a different task than it was entered in'.
+        """
+        try:
+            await stack.aclose()
+        except Exception as e:
+            logger.debug(f"Error closing MCP transport stack: {e}")
+
     async def _connect_stdio(self, server_id: str, name: str, command: str, args: List[str], env: Dict[str, str]) -> bool:
         """Connect to an MCP server via stdio transport."""
+        from contextlib import AsyncExitStack
+
+        stack = AsyncExitStack()
         try:
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
-            from contextlib import AsyncExitStack
 
             server_params = StdioServerParameters(
                 command=command,
@@ -82,7 +98,6 @@ class McpManager:
                 env={**os.environ, **env} if env else None,
             )
 
-            stack = AsyncExitStack()
             transport = await stack.enter_async_context(stdio_client(server_params))
             read_stream, write_stream = transport
             session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
@@ -124,18 +139,25 @@ class McpManager:
             return True
 
         except ImportError:
+            await self._aclose_quietly(stack)
             logger.warning("MCP package not installed. Install with: pip install mcp")
             self._connections[server_id] = {"status": "error", "error": "mcp package not installed", "name": name}
             return False
+        except Exception:
+            # Close the transport in this task before the error propagates, so
+            # anyio never tears the stdio task group down later in another task.
+            await self._aclose_quietly(stack)
+            raise
 
     async def _connect_sse(self, server_id: str, name: str, url: str) -> bool:
         """Connect to an MCP server via SSE transport."""
+        from contextlib import AsyncExitStack
+
+        stack = AsyncExitStack()
         try:
             from mcp import ClientSession
             from mcp.client.sse import sse_client
-            from contextlib import AsyncExitStack
 
-            stack = AsyncExitStack()
             transport = await stack.enter_async_context(sse_client(url))
             read_stream, write_stream = transport
             session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
@@ -166,9 +188,13 @@ class McpManager:
             return True
 
         except ImportError:
+            await self._aclose_quietly(stack)
             logger.warning("MCP package not installed. Install with: pip install mcp")
             self._connections[server_id] = {"status": "error", "error": "mcp package not installed", "name": name}
             return False
+        except Exception:
+            await self._aclose_quietly(stack)
+            raise
 
     async def disconnect_server(self, server_id: str):
         """Disconnect from an MCP server."""

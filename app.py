@@ -750,6 +750,10 @@ async def serve_email(request: Request):
 async def serve_projects(request: Request):
     return await serve_index(request)
 
+@app.get("/council")
+async def serve_council(request: Request):
+    return await serve_index(request)
+
 @app.get("/memory")
 async def serve_memory(request: Request):
     return await serve_index(request)

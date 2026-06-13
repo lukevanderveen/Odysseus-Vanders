@@ -162,6 +162,42 @@ async def test_run_report_missing_report_returns_error(db_factory):
     assert result["status"] == "error"
 
 
+async def test_queue_state_tracks_running_and_queued(db_factory):
+    db = db_factory()
+    db.add(Report(id="r2", owner="vanders", project_id="p1", title="second"))
+    db.commit()
+    db.close()
+
+    release = asyncio.Event()
+    observed = {}
+
+    async def gated(messages):
+        observed.setdefault("mid_run", runner.queue_state())
+        await release.wait()
+        return GOOD_OUTPUT
+
+    t1 = asyncio.create_task(runner.run_report(
+        "r1", complete=gated, session_factory=db_factory, retrieve=fake_retrieve,
+        notify=lambda **kw: None))
+    t2 = asyncio.create_task(runner.run_report(
+        "r2", complete=gated, session_factory=db_factory, retrieve=fake_retrieve,
+        notify=lambda **kw: None))
+    while not observed.get("mid_run"):
+        await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)  # let the second run join the queue
+
+    state = runner.queue_state()
+    assert state["running"] in ("r1", "r2")
+    other = ({"r1", "r2"} - {state["running"]}).pop()
+    assert state["queued"] == [other]
+    release.set()
+    await asyncio.gather(t1, t2)
+
+    state = runner.queue_state()
+    assert state["running"] is None
+    assert state["queued"] == []
+
+
 async def test_runs_serialise_on_the_queue(db_factory):
     db = db_factory()
     db.add(Report(id="r2", owner="vanders", project_id="p1", title="second"))

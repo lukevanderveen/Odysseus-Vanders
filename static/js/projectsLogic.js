@@ -43,22 +43,6 @@ export const reportChip = (r) => {
   return map[(r || {}).status] || { label: 'Unknown', cls: 'proj-badge-none' };
 };
 
-// scores: {"grounded": {...}, "judged": {...}} — one line, with the judged
-// half explicitly labelled as AI opinion (the grounded/judged split must
-// survive into the UI, or it was pointless).
-export const scoreSummary = (scores) => {
-  const g = (scores || {}).grounded || {};
-  const j = (scores || {}).judged || {};
-  const parts = [];
-  if (Number.isFinite(g.technical_readiness)) parts.push(`Technical ${g.technical_readiness}`);
-  if (Number.isFinite(g.recent_activity)) parts.push(`Activity ${g.recent_activity}`);
-  const judged = [];
-  if (Number.isFinite(j.monetisation_clarity)) judged.push(`Monetisation ${j.monetisation_clarity}`);
-  if (Number.isFinite(j.marketability)) judged.push(`Marketability ${j.marketability}`);
-  if (judged.length) parts.push(`AI judgement: ${judged.join(' · ')}`);
-  return parts.join(' · ');
-};
-
 // Ids that were running last poll and have landed as drafts — drives the
 // "ready for approval" toast. Errors surface on the row itself, not a toast.
 export const newlyDrafted = (prevRunningIds, reports) => {
