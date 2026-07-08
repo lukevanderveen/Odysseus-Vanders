@@ -18,20 +18,20 @@ from pydantic import BaseModel
 
 from core.database import CrewMember, Project, Report, SessionLocal
 from services.council.personas import seed_council_members
-from services.council.runner import queue_state, run_report
+from services.council.runner import (
+    COMPONENT_TYPES as REPORT_TYPES,
+    queue_state,
+    run_full_council,
+    run_report,
+)
 from src.auth_helpers import get_current_user
 
 logger = logging.getLogger(__name__)
 
-# Allowed report types → (department, title prefix). The allowlist is the
-# guard because report_type names a template file on disk.
-REPORT_TYPES = {
-    "developer_review": ("developer", "Developer Review"),
-    "market_opportunity": ("research", "Market Opportunity Report"),
-    "launch_strategy": ("business", "Launch Strategy"),
-    "architecture_review": ("architect", "Architecture Review"),
-    "marketing_audit": ("marketing", "Marketing Audit"),
-}
+# Single-report allowlist → (department, title prefix). Sourced from the runner
+# so the route and the full-council orchestrator never drift; the meta
+# ``council_review`` type is deliberately excluded (only the orchestrator makes
+# one). The allowlist is the guard because report_type names a template on disk.
 
 VALID_TRANSITIONS = {"approve": "approved", "dismiss": "dismissed"}
 
@@ -41,6 +41,30 @@ _report_tasks: set = set()
 class CreateReportRequest(BaseModel):
     project_id: str
     report_type: str = "developer_review"
+
+
+class RunFullRequest(BaseModel):
+    project_id: str
+
+
+class UpdateMemberRequest(BaseModel):
+    name: Optional[str] = None
+    avatar: Optional[str] = None
+    personality: Optional[str] = None
+    model: Optional[str] = None
+    endpoint_url: Optional[str] = None
+
+
+def _member_to_dict(m: CrewMember) -> Dict[str, Any]:
+    return {
+        "id": m.id,
+        "department": m.department,
+        "name": m.name,
+        "avatar": m.avatar,
+        "personality": m.personality,
+        "model": m.model,
+        "endpoint_url": m.endpoint_url,
+    }
 
 
 def _report_to_dict(r: Report, include_body: bool = False) -> Dict[str, Any]:
@@ -115,6 +139,26 @@ def setup_council_routes():
         _report_tasks.add(task)
         task.add_done_callback(_report_tasks.discard)
         return {"report_id": rid, "status": "running"}
+
+    @router.post("/run-full")
+    async def run_full(body: RunFullRequest, request: Request):
+        """Run every department review for a project, then a unified council
+        synthesis — one click, drafted for approval."""
+        user = _owner(request)
+        db = SessionLocal()
+        try:
+            q = db.query(Project).filter(Project.id == body.project_id)
+            if user is not None:
+                q = q.filter(Project.owner == user)
+            if not q.first():
+                raise HTTPException(status_code=404, detail="Project not found")
+        finally:
+            db.close()
+
+        task = asyncio.create_task(run_full_council(body.project_id, user))
+        _report_tasks.add(task)
+        task.add_done_callback(_report_tasks.discard)
+        return {"status": "running"}
 
     @router.get("/reports")
     def list_reports(request: Request, status: Optional[str] = None,
@@ -204,6 +248,41 @@ def setup_council_routes():
                     "queue_position": pos,
                 })
             return {"members": members}
+        finally:
+            db.close()
+
+    @router.get("/members")
+    def list_members(request: Request):
+        user = _owner(request)
+        seed_council_members(user, session_factory=SessionLocal)  # idempotent
+        db = SessionLocal()
+        try:
+            q = db.query(CrewMember).filter(CrewMember.department.isnot(None))
+            if user is not None:
+                q = q.filter(CrewMember.owner == user)
+            members = q.order_by(CrewMember.name).all()
+            return {"members": [_member_to_dict(m) for m in members]}
+        finally:
+            db.close()
+
+    @router.put("/members/{mid}")
+    def update_member(mid: str, body: UpdateMemberRequest, request: Request):
+        user = _owner(request)
+        db = SessionLocal()
+        try:
+            q = db.query(CrewMember).filter(CrewMember.id == mid)
+            if user is not None:
+                q = q.filter(CrewMember.owner == user)
+            member = q.first()
+            if not member:
+                raise HTTPException(status_code=404, detail="Member not found")
+            # Only the editable fields — department is never reset by an edit.
+            for field in ("name", "avatar", "personality", "model", "endpoint_url"):
+                val = getattr(body, field)
+                if val is not None:
+                    setattr(member, field, val)
+            db.commit()
+            return _member_to_dict(member)
         finally:
             db.close()
 

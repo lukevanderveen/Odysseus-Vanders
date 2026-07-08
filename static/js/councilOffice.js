@@ -1,15 +1,15 @@
 // ============================================
 // Council office view + Project Command Centre (Agent Council Phase 4)
-// Pure presentation over existing data: department nodes arranged around a
-// central Council hub, and a per-project popup with the overall score, score
-// bars, index freshness, and latest reports. No new backend.
+// Office: department nodes arranged around a central Council hub.
+// Command Centre: the one deep view of a single project — score, activity, and
+// its live, actionable council report stack (shared with the Council tabs).
 // ============================================
 import uiModule from './ui.js';
 import {
-  DEPT_COLORS, latestScoredReport, memberStatusChip, officeLayout,
-  overallScore, scoreBarsHtml,
+  DEPT_COLORS, commitAgeLabel, latestScoredReport, memberStatusChip,
+  officeLayout, projectHealth,
 } from './councilLogic.js';
-import { reportChip } from './projectsLogic.js';
+import { stackHtml } from './councilStack.js';
 
 const esc = uiModule.esc;
 
@@ -37,74 +37,82 @@ const _officeNode = (m, pos, reports) => {
     </div>`;
 };
 
-export const officeHtml = (members, reports, draftCount) => {
-  if (!members.length) return '<p class="memory-desc">No council members yet.</p>';
+// active: a report is generating — the scene comes alive (flowing connector
+// lines, a pulsing hub) so a full-council run reads as work in progress.
+export const officeHtml = (members, reports, draftCount, active = false) => {
+  if (!members.length) {
+    return '<p class="memory-desc office-empty">No council members yet — open the Members tab to seed the council.</p>';
+  }
   const layout = officeLayout(members, 100, 100);
   const lines = layout.map((p) =>
     `<line x1="50" y1="50" x2="${p.x}" y2="${p.y}"/>`).join('');
   const nodes = members.map((m, i) => _officeNode(m, layout[i], reports)).join('');
   return `
-    <div class="office-canvas">
+    <div class="office-canvas${active ? ' office-active' : ''}">
       <svg class="office-lines" viewBox="0 0 100 100" preserveAspectRatio="none">${lines}</svg>
       ${nodes}
-      <button class="office-hub" data-action="open-approvals" title="Open the approval inbox">
+      <button class="office-hub${active ? ' office-hub-active' : ''}" data-action="open-approvals" title="Open the approval inbox">
         <span class="office-hub-label">Council</span>
         ${draftCount ? `<span class="office-hub-count">${esc(String(draftCount))}</span>` : ''}
       </button>
+      <button class="office-shader-toggle" data-action="toggle-shader" title="Toggle background intensity">✦</button>
     </div>
-    <p class="memory-desc doclib-desc office-hint">Click a department for its report history, or the Council hub for approvals.</p>`;
+    <p class="memory-desc doclib-desc office-hint">Click a department to view or edit its persona, or the Council hub for approvals. Convene the council below.</p>`;
 };
 
 // ── Project Command Centre ───────────────────────────────────────────────────
+// The single per-project deep view: opened from a project card, it shows the
+// headline score, activity/index freshness, and the live report stack with
+// openable bodies + approve/dismiss. It re-renders from a getter so a run in
+// progress updates it in place.
 
 const _modal = () => document.getElementById('command-centre-modal');
 const _body = () => document.getElementById('command-centre-body');
+
+let _cc = { project: null, getReports: null, onAction: null, activeTab: null };
+const _ccBodyCache = new Map();
+
+const _ccReports = () => {
+  const all = _cc.getReports ? _cc.getReports() : [];
+  return all.filter((r) => r.project_id === (_cc.project || {}).id);
+};
 
 const _indexStatusLine = (project) => {
   if (!project.indexed_at && !project.deep_indexed_at) {
     return '<span class="cc-warn">Not indexed — run Index in the Projects tool.</span>';
   }
-  if (project.stale) {
-    return '<span class="cc-warn">Index may be stale. Run Deep Index.</span>';
-  }
+  if (project.stale) return '<span class="cc-warn">Index may be stale. Run Deep Index.</span>';
   const when = project.deep_indexed_at || project.indexed_at;
   return `Index fresh — last indexed ${esc(String(when).slice(0, 10))}`;
 };
 
-// Real git signal captured at report time (scores.grounded._signals).
-const _activityLine = (latest) => {
-  const days = latest?.scores?.grounded?._signals?.days_since_commit;
-  if (days === null || days === undefined) return 'Commit activity unknown (not a git repo, or no scored report yet).';
-  const d = Math.round(days);
-  const when = d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
-  return `Last commit ${esc(when)} (as of the latest report).`;
+const _ccLoadBody = async (rid) => {
+  const el = _body()?.querySelector(`[data-body-for="${rid}"]`);
+  if (!el) return;
+  if (_ccBodyCache.has(rid)) { el.textContent = _ccBodyCache.get(rid); return; }
+  try {
+    const res = await fetch(`/api/council/reports/${rid}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `report fetch failed (${res.status})`);
+    const body = data.body || '(empty report)';
+    _ccBodyCache.set(rid, body);
+    el.textContent = body;
+  } catch (e) {
+    el.textContent = `Failed to load report: ${e.message}`;
+  }
 };
 
-const _reportLine = (r) => {
-  const chip = reportChip(r);
-  const color = DEPT_COLORS[r.department] || 'var(--fg)';
-  return `
-    <div class="cc-report" style="--dept-color:${color}">
-      <span class="proj-name">${esc(r.title || 'Report')}</span>
-      <span class="cc-report-date">${esc(String(r.created_at || '').slice(0, 10))}</span>
-      <span class="proj-badge ${chip.cls}">${esc(chip.label)}</span>
-    </div>`;
-};
-
-export const openCommandCentre = (project, reports) => {
-  const modal = _modal();
+export const renderCommandCentre = () => {
   const body = _body();
-  if (!modal || !body) return;
-
-  const mine = (reports || []).filter((r) => r.project_id === project.id);
+  const project = _cc.project;
+  if (!body || !project) return;
+  const mine = _ccReports();
   const latest = latestScoredReport(mine);
-  const score = latest ? overallScore(latest.scores) : null;
+  const health = projectHealth(mine);
   const chips = (project.stack || [])
     .map((s) => `<span class="proj-chip">${esc(s)}</span>`).join('');
-  const recent = [...mine].sort(
-    (a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')),
-  ).slice(0, 5);
-
+  const commit = commitAgeLabel(health.lastCommitDays);
+  const group = { projectId: project.id, name: project.name, reports: mine };
   body.innerHTML = `
     <div class="cc-head">
       <div>
@@ -113,21 +121,39 @@ export const openCommandCentre = (project, reports) => {
         <div class="memory-desc report-scores" title="${esc(project.path || '')}">${esc(project.path || '')}</div>
       </div>
       <div class="cc-score">
-        <span class="cc-score-num">${score === null ? '—' : esc(String(score))}</span>
+        <span class="cc-score-num">${health.score === null ? '—' : esc(String(health.score))}</span>
         <span class="cc-score-denom">/100</span>
-        <span class="cc-score-hint">${score === null ? 'no scored report yet' : `from ${esc(latest.title || 'latest report')}`}</span>
+        <span class="cc-score-hint">${health.score === null ? 'no scored report yet' : `from ${esc((latest || {}).title || 'latest report')}`}</span>
       </div>
     </div>
-    ${latest ? scoreBarsHtml(latest.scores, esc) : '<p class="memory-desc">Run a report to score this project.</p>'}
-    <h3 class="cc-section">Activity & index</h3>
-    <div class="memory-desc report-scores">${_activityLine(latest)}</div>
+    <div class="memory-desc report-scores">${commit
+      ? `Last commit ${esc(commit)} (as of the latest report).`
+      : 'Commit activity unknown (not a git repo, or no scored report yet).'}</div>
     <div class="memory-desc report-scores">${_indexStatusLine(project)}</div>
-    <h3 class="cc-section">Latest reports</h3>
-    ${recent.length
-      ? recent.map(_reportLine).join('')
-      : '<p class="memory-desc">No reports for this project yet.</p>'}`;
+    <h3 class="cc-section">Council reviews</h3>
+    ${stackHtml(group, esc, { activeType: _cc.activeTab, showActions: true })
+      || '<p class="memory-desc">No reports yet — run a Developer Review or full Council from the project card.</p>'}`;
+  body.querySelectorAll('[data-body-for]').forEach((el) => _ccLoadBody(el.dataset.bodyFor));
+};
 
+export const openCommandCentre = (project, opts = {}) => {
+  const modal = _modal();
+  if (!modal || !_body()) return;
+  wireCommandCentre();
+  _cc = {
+    project,
+    getReports: opts.getReports || (() => []),
+    onAction: opts.onAction || null,
+    activeTab: null,
+  };
+  renderCommandCentre();
   modal.classList.remove('hidden');
+};
+
+// Re-render the open Command Centre from fresh data (driven by the Projects
+// poll so a run in progress lights up live). No-op while it's closed.
+export const refreshCommandCentre = () => {
+  if (_modal() && !_modal().classList.contains('hidden')) renderCommandCentre();
 };
 
 export const closeCommandCentre = () => _modal()?.classList.add('hidden');
@@ -138,4 +164,15 @@ export const wireCommandCentre = () => {
   _wired = true;
   document.getElementById('close-command-centre-modal')
     ?.addEventListener('click', closeCommandCentre);
+  // One delegated handler: tab switches and draft approve/dismiss.
+  _body()?.addEventListener('click', (ev) => {
+    const tabBtn = ev.target.closest('[data-report-tab]');
+    if (tabBtn) { _cc.activeTab = tabBtn.dataset.reportTab; return renderCommandCentre(); }
+    const btn = ev.target.closest('button[data-action]');
+    if (!btn) return;
+    const rid = btn.closest('[data-report-id]')?.dataset.reportId;
+    if (!rid || !_cc.onAction) return;
+    if (btn.dataset.action === 'approve') _cc.onAction(rid, 'approve');
+    if (btn.dataset.action === 'dismiss') _cc.onAction(rid, 'dismiss');
+  });
 };

@@ -24,14 +24,24 @@ as AI judgement, so commit to a number:
 
 ---
 
+Ground every claim in the evidence below. The **Verified repository facts** are
+authoritative — never state anything that contradicts them (for example, do not
+call a TODO count of 4 "many", or claim a README is missing when one is present).
+Every gap and every quick win must cite a specific file, signal, or excerpt from
+the evidence; if you cannot ground a claim, omit it. Do not invent audience or
+presentation problems that are not visible in the evidence below.
+
 Project: {project_name}
 Stack: {stack}
 
-## Grounded scores (computed from real repo signals — do not re-score these)
-{grounded_scores}
+## Verified repository facts (ground truth — never contradict)
+{verified_facts}
+
+## Repository structure (file tree + key configs)
+{repo_context}
 
 ## Structural summary (from the project's deep index)
 {deep_summary}
 
-## Relevant code excerpts (from the project's RAG index)
+## Evidence excerpts (retrieved from the project's index by concern)
 {rag_snippets}

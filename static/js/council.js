@@ -5,9 +5,12 @@
 // index.html (#council-modal); this module renders into it.
 // ============================================
 import uiModule from './ui.js';
-import { DEPT_COLORS, filterHistory, memberStatusChip, scoreBarsHtml, splitReports } from './councilLogic.js';
-import { reportChip } from './projectsLogic.js';
+import { DEPT_COLORS, filterHistory, memberEditPayload, memberStatusChip, nextShaderMode, splitReports } from './councilLogic.js';
+import { reportsByProject } from './projectsLogic.js';
 import { officeHtml } from './councilOffice.js';
+import { stackHtml } from './councilStack.js';
+import councilShader from './councilShader.js';
+import { sortModelIds } from './modelSort.js';
 
 const esc = uiModule.esc;
 
@@ -27,8 +30,11 @@ let _historyDept = '';
 let _runProject = '';   // run-form selections survive re-renders
 let _runType = '';
 let _runBusy = false;
-let _openBodies = new Set();
+let _stackActive = new Map();   // projectId -> active report_type in its stack
+let _bodyCache = new Map();     // report id -> loaded body (survives poll re-renders)
+let _editing = null;   // council member being edited (card #10), or null
 let _pollTimer = null;
+let _shaderMode = (typeof localStorage !== 'undefined' && localStorage.getItem('councilShaderMode')) || 'subtle';
 
 const _modal = () => document.getElementById('council-modal');
 const _panel = () => document.getElementById('council-panel');
@@ -60,7 +66,7 @@ const _memberCard = (m) => {
       ? `Queued (position ${m.queue_position})`
       : 'Idle — ready for a report';
   return `
-    <div class="proj-card admin-card council-member" style="--dept-color:${color}">
+    <div class="proj-card admin-card council-member" data-department="${esc(m.department)}" style="--dept-color:${color}">
       <div class="proj-card-head">
         <span class="council-avatar">${esc((m.name || '?')[0].toUpperCase())}</span>
         <span class="proj-name">${esc(m.name)}</span>
@@ -68,6 +74,29 @@ const _memberCard = (m) => {
       </div>
       <div class="council-dept">${esc(m.department)} department</div>
       <div class="memory-desc report-scores">${esc(detail)}</div>
+      <div class="proj-actions"><button class="memory-toolbar-btn" data-action="edit-member">Edit persona</button></div>
+    </div>`;
+};
+
+const _memberForm = (m) => {
+  const color = DEPT_COLORS[m.department] || 'var(--fg)';
+  return `
+    <div class="council-edit-form" data-member-id="${esc(m.id)}" style="--dept-color:${color}">
+      <h2 class="council-reports-title">Edit ${esc(m.department)} member</h2>
+      <label class="assistant-field"><span>Name</span>
+        <input type="text" id="council-edit-name" class="settings-input" value="${esc(m.name || '')}"></label>
+      <label class="assistant-field"><span>Personality (system prompt)</span>
+        <textarea id="council-edit-personality" class="settings-input" rows="6">${esc(m.personality || '')}</textarea></label>
+      <div class="assistant-field-row">
+        <label class="assistant-field" style="flex:1;"><span>Model endpoint</span>
+          <select id="council-edit-endpoint" class="settings-input"></select></label>
+        <label class="assistant-field" style="flex:1;"><span>Model</span>
+          <select id="council-edit-model" class="settings-input"></select></label>
+      </div>
+      <div class="council-run-form">
+        <button id="council-edit-save" class="memory-toolbar-btn">Save</button>
+        <button id="council-edit-cancel" class="memory-toolbar-btn">Cancel</button>
+      </div>
     </div>`;
 };
 
@@ -87,43 +116,36 @@ const _runForm = () => {
       <button id="council-run-btn" class="memory-toolbar-btn" ${_runBusy ? 'disabled' : ''}>
         ${_runBusy ? 'Queuing…' : 'Run report'}
       </button>
+      <button id="council-run-full-btn" class="memory-toolbar-btn proj-council-btn" ${_runBusy ? 'disabled' : ''}
+        title="Run every department review, then a unified Council Review">
+        ${_runBusy ? 'Queuing…' : 'Run full council'}
+      </button>
     </div>`;
 };
 
-const _reportRow = (r, { actions }) => {
-  const chip = reportChip(r);
-  const open = _openBodies.has(r.id);
-  const isDraft = r.status === 'draft';
-  const color = DEPT_COLORS[r.department] || 'var(--fg)';
+// Reports grouped into one consolidated stack per project (shared renderer).
+const _stacksHtml = (reports, showActions) => {
+  const groups = reportsByProject(reports);
+  return `<div class="council-reports">${groups.map((g) => stackHtml(
+    { projectId: g.projectId, name: _projectName(g.projectId), reports: g.reports },
+    esc, { activeType: _stackActive.get(g.projectId), showActions },
+  )).join('')}</div>`;
+};
+
+const _renderMembers = () => {
+  if (_editing) return _memberForm(_editing);
+  if (!_members.length) return '<p class="memory-desc">No council members yet.</p>';
   return `
-    <div class="report-row admin-card council-member" data-report-id="${esc(r.id)}" style="--dept-color:${color}">
-      <div class="proj-card-head">
-        <span class="proj-name">${esc(r.title || 'Report')}</span>
-        <span class="proj-badge ${chip.cls}${r.status === 'running' ? ' report-chip-running' : ''}">${esc(chip.label)}</span>
-      </div>
-      <div class="memory-desc report-scores">${esc(_projectName(r.project_id))} · ${esc(r.department || '')}</div>
-      ${scoreBarsHtml(r.scores, esc)}
-      ${r.status === 'error' ? `<div class="memory-desc report-scores">${esc(r.error || 'unknown error')}</div>` : ''}
-      <div class="proj-actions">
-        ${r.status !== 'running' && r.status !== 'error'
-          ? `<button class="memory-toolbar-btn" data-action="toggle-body">${open ? 'Hide' : 'View'}</button>` : ''}
-        ${actions && isDraft ? `<button class="memory-toolbar-btn" data-action="approve">Approve</button>` : ''}
-        ${actions && isDraft ? `<button class="memory-toolbar-btn" data-action="dismiss">Dismiss</button>` : ''}
-      </div>
-      ${open ? `<div class="report-body" data-body-for="${esc(r.id)}">Loading…</div>` : ''}
-    </div>`;
+    <div class="projects-grid">${_members.map(_memberCard).join('')}</div>
+    <p class="memory-desc doclib-desc">Click a member's Edit persona to change its name, personality, model, or endpoint. Convene a council from the Office tab.</p>`;
 };
-
-const _renderMembers = () => `
-  <div class="projects-grid">${_members.map(_memberCard).join('')}</div>
-  <h2 class="council-reports-title">Run a report</h2>
-  <p class="memory-desc doclib-desc">Pick a project and a report type — the department drafts it for your approval.</p>
-  ${_runForm()}`;
 
 const _renderApprovals = () => {
   const { inbox } = splitReports(_reports);
-  if (!inbox.length) return '<p class="memory-desc">Nothing awaiting approval.</p>';
-  return `<div class="council-reports">${inbox.map((r) => _reportRow(r, { actions: true })).join('')}</div>`;
+  if (!inbox.length) {
+    return '<p class="memory-desc">Nothing awaiting approval — convene a council from the Office tab.</p>';
+  }
+  return _stacksHtml(inbox, true);
 };
 
 const _renderHistory = () => {
@@ -136,7 +158,7 @@ const _renderHistory = () => {
   return `
     <div class="council-history-bar"><select id="council-history-dept" class="settings-input">${opts}</select></div>
     ${rows.length
-      ? `<div class="council-reports">${rows.map((r) => _reportRow(r, { actions: false })).join('')}</div>`
+      ? _stacksHtml(rows, false)
       : '<p class="memory-desc">No settled reports yet.</p>'}`;
 };
 
@@ -151,21 +173,38 @@ const _render = () => {
     const n = counts[tab];
     b.textContent = `${tab[0].toUpperCase()}${tab.slice(1)}${n ? ` (${n})` : ''}`;
   });
-  panel.innerHTML = _tab === 'office' ? officeHtml(_members, _reports, inbox.filter((r) => r.status === 'draft').length)
+  const active = _reports.some((r) => r.status === 'running')
+    || _members.some((m) => m.status !== 'Ready');
+  const draftCount = inbox.filter((r) => r.status === 'draft').length;
+  panel.innerHTML = _tab === 'office' ? officeHtml(_members, _reports, draftCount, active) + _runForm()
     : _tab === 'members' ? _renderMembers()
     : _tab === 'approvals' ? _renderApprovals()
     : _renderHistory();
-  _openBodies.forEach((rid) => _loadBody(rid));
+  panel.querySelectorAll('[data-body-for]').forEach((el) => _loadBody(el.dataset.bodyFor));
+  // Office background shader: re-attach into the freshly-rendered canvas (the
+  // persistent canvas keeps its GL context), or stop it when we leave Office.
+  if (_tab === 'office') {
+    const canvas = panel.querySelector('.office-canvas');
+    if (canvas) {
+      canvas.classList.toggle('shader-bold', _shaderMode === 'bold');
+      councilShader.attach(canvas, { active, mode: _shaderMode });
+    }
+  } else {
+    councilShader.stop();
+  }
 };
 
 const _loadBody = async (rid) => {
   const el = document.querySelector(`#council-panel [data-body-for="${rid}"]`);
   if (!el) return;
+  if (_bodyCache.has(rid)) { el.textContent = _bodyCache.get(rid); return; }
   try {
     const res = await fetch(`/api/council/reports/${rid}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || `report fetch failed (${res.status})`);
-    el.textContent = data.body || '(empty report)';
+    const body = data.body || '(empty report)';
+    _bodyCache.set(rid, body);
+    el.textContent = body;
   } catch (e) {
     el.textContent = `Failed to load report: ${e.message}`;
   }
@@ -188,7 +227,8 @@ const _schedulePoll = () => {
   clearTimeout(_pollTimer);
   const active = _reports.some((r) => r.status === 'running')
     || _members.some((m) => m.status !== 'Ready');
-  if (!isOpen() || !active) return;
+  // Don't re-render out from under an open editor form.
+  if (!isOpen() || _editing || !active) return;
   _pollTimer = setTimeout(_refresh, 5000);
 };
 
@@ -218,6 +258,31 @@ const _runReport = async () => {
   }
 };
 
+const _runFullCouncil = async () => {
+  const project_id = document.getElementById('council-run-project')?.value;
+  if (!project_id || _runBusy) return;
+  _runProject = project_id;
+  _runBusy = true;
+  _render();
+  try {
+    const res = await fetch('/api/council/run-full', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `run failed (${res.status})`);
+    uiModule.showToast('Full council convened — watch the Office, then the Approvals tab');
+    _tab = 'office';   // the office comes alive as each department reports in
+    await _refresh();
+  } catch (e) {
+    uiModule.showError(`Full council: ${e.message}`);
+  } finally {
+    _runBusy = false;
+    _render();
+  }
+};
+
 const _reportAction = async (rid, action) => {
   try {
     const res = await fetch(`/api/council/reports/${rid}/${action}`, { method: 'POST' });
@@ -227,6 +292,84 @@ const _reportAction = async (rid, action) => {
     await _refresh();
   } catch (e) {
     uiModule.showError(`Report: ${e.message}`);
+  }
+};
+
+// ── member editor (card #10) ──────────────────────────────────────────────────
+
+const _openEditor = async (department) => {
+  try {
+    const res = await fetch('/api/council/members');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `members fetch failed (${res.status})`);
+    const member = (data.members || []).find((m) => m.department === department);
+    if (!member) throw new Error('member not found');
+    _editing = member;
+    _render();
+    _populateEndpointModel(member);   // fill the endpoint/model selects once
+  } catch (e) {
+    uiModule.showError(`Edit member: ${e.message}`);
+  }
+};
+
+const _populateEndpointModel = (member) => {
+  const epSelect = document.getElementById('council-edit-endpoint');
+  const modelSelect = document.getElementById('council-edit-model');
+  if (!epSelect || !modelSelect) return;
+  fetch('/api/model-endpoints').then((r) => (r.ok ? r.json() : [])).then((eps) => {
+    const endpoints = Array.isArray(eps) ? eps : [];
+    let html = '<option value="">(use default)</option>';
+    for (const ep of endpoints) {
+      if (!ep.is_enabled) continue;
+      const url = ep.base_url || '';
+      const sel = member.endpoint_url && url
+        && member.endpoint_url.includes(url.replace('/v1', '').replace(/\/$/, '')) ? ' selected' : '';
+      html += `<option value="${esc(url)}"${sel}>${esc(ep.name || url)}</option>`;
+    }
+    epSelect.innerHTML = html;
+    epSelect.onchange = async () => {
+      const url = epSelect.value;
+      if (!url) { modelSelect.innerHTML = '<option value="">(default)</option>'; return; }
+      const ep = endpoints.find((e) => e.base_url === url);
+      if (!ep) return;
+      modelSelect.innerHTML = '<option value="">loading…</option>';
+      try {
+        const res = await fetch(`/api/model-endpoints/${ep.id}/models`);
+        const models = await res.json();
+        const ids = (models.models || models || [])
+          .map((m) => (typeof m === 'string' ? m : (m.id || m.name || ''))).filter(Boolean);
+        let mh = '<option value="">(default)</option>';
+        for (const mid of sortModelIds(ids)) {
+          mh += `<option value="${esc(mid)}"${mid === member.model ? ' selected' : ''}>${esc(mid.split('/').pop())}</option>`;
+        }
+        modelSelect.innerHTML = mh;
+      } catch { modelSelect.innerHTML = '<option value="">(failed)</option>'; }
+    };
+    if (epSelect.value) epSelect.onchange();
+  });
+};
+
+const _saveMember = async () => {
+  if (!_editing) return;
+  const payload = memberEditPayload({
+    name: document.getElementById('council-edit-name')?.value,
+    personality: document.getElementById('council-edit-personality')?.value,
+    model: document.getElementById('council-edit-model')?.value,
+    endpoint: document.getElementById('council-edit-endpoint')?.value,
+  });
+  try {
+    const res = await fetch(`/api/council/members/${_editing.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `save failed (${res.status})`);
+    uiModule.showToast('Member updated');
+    _editing = null;
+    await _refresh();
+  } catch (e) {
+    uiModule.showError(`Save member: ${e.message}`);
   }
 };
 
@@ -243,16 +386,40 @@ const _wire = () => {
   });
   // One delegated handler for everything inside the panel (CSP-safe).
   _panel()?.addEventListener('click', (ev) => {
+    if (ev.target.closest('#council-run-full-btn')) return _runFullCouncil();
     if (ev.target.closest('#council-run-btn')) return _runReport();
+    if (ev.target.closest('#council-edit-save')) return _saveMember();
+    if (ev.target.closest('#council-edit-cancel')) { _editing = null; return _render(); }
+    const editBtn = ev.target.closest('[data-action="edit-member"]');
+    if (editBtn) {
+      const dept = editBtn.closest('[data-department]')?.dataset.department;
+      if (dept) _openEditor(dept);
+      return;
+    }
+    // Clicking a department in the Office opens that member's persona (not the
+    // old jump to a frequently-empty filtered History).
     const node = ev.target.closest('.office-node');
     if (node) {
-      _historyDept = node.dataset.department || '';
-      _tab = 'history';
-      return _render();
+      _tab = 'members';
+      return _openEditor(node.dataset.department || '');
+    }
+    if (ev.target.closest('[data-action="toggle-shader"]')) {
+      _shaderMode = nextShaderMode(_shaderMode);
+      try { localStorage.setItem('councilShaderMode', _shaderMode); } catch (_) { /* private mode */ }
+      const canvas = _panel()?.querySelector('.office-canvas');
+      if (canvas) canvas.classList.toggle('shader-bold', _shaderMode === 'bold');
+      councilShader.setMode(_shaderMode);
+      return;
     }
     if (ev.target.closest('[data-action="open-approvals"]')) {
       _tab = 'approvals';
       return _render();
+    }
+    const tabBtn = ev.target.closest('[data-report-tab]');
+    if (tabBtn) {
+      const pid = tabBtn.closest('[data-project-id]')?.dataset.projectId;
+      if (pid) { _stackActive.set(pid, tabBtn.dataset.reportTab); _render(); }
+      return;
     }
     const btn = ev.target.closest('button[data-action]');
     if (!btn) return;
@@ -260,10 +427,6 @@ const _wire = () => {
     if (!rid) return;
     if (btn.dataset.action === 'approve') _reportAction(rid, 'approve');
     if (btn.dataset.action === 'dismiss') _reportAction(rid, 'dismiss');
-    if (btn.dataset.action === 'toggle-body') {
-      if (_openBodies.has(rid)) _openBodies.delete(rid); else _openBodies.add(rid);
-      _render();
-    }
   });
   _panel()?.addEventListener('change', (ev) => {
     if (ev.target.id === 'council-history-dept') {
@@ -286,6 +449,7 @@ export const open = () => {
 
 export const close = () => {
   clearTimeout(_pollTimer);
+  councilShader.stop();
   _modal()?.classList.add('hidden');
 };
 

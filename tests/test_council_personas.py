@@ -128,6 +128,28 @@ def test_seed_fills_only_missing_departments(db_factory):
     db.close()
 
 
+def test_seed_never_resets_an_edited_member(db_factory):
+    # Member editor (card #10) relies on this: a user-edited persona must
+    # survive any later re-seed (a fresh council session re-runs the seeder).
+    personas.seed_council_members("vanders", session_factory=db_factory)
+    db = db_factory()
+    dev = (db.query(CrewMember)
+           .filter(CrewMember.owner == "vanders", CrewMember.department == "developer").first())
+    dev.name = "Ada"
+    dev.personality = "Edited persona."
+    db.commit()
+    db.close()
+
+    again = personas.seed_council_members("vanders", session_factory=db_factory)
+    assert again == 0
+    db = db_factory()
+    dev = (db.query(CrewMember)
+           .filter(CrewMember.owner == "vanders", CrewMember.department == "developer").first())
+    assert dev.name == "Ada"
+    assert dev.personality == "Edited persona."
+    db.close()
+
+
 def test_seed_is_owner_scoped(db_factory):
     personas.seed_council_members("vanders", session_factory=db_factory)
     personas.seed_council_members("other", session_factory=db_factory)

@@ -38,6 +38,10 @@ JUDGED_KEYS = (
     "launch_readiness", "ai_automation_potential",
 )
 
+# The grounded (computed-from-repo) dimensions; identical across a project's
+# component reports, but meaned for symmetry with the judged half.
+GROUNDED_KEYS = ("technical_readiness", "recent_activity")
+
 
 def _iter_files(root: Path):
     for p in sorted(root.rglob("*")):
@@ -191,6 +195,57 @@ def grounded_scores(project_path) -> Dict:
         "recent_activity": recent_activity_score(signals),
         "_signals": signals,
     }
+
+
+def _mean_per_key(halves, keys) -> Dict[str, int]:
+    """Mean each dimension over only the components that scored it — an absent
+    key never dilutes the average — rounding and clamping to 0–100."""
+    out: Dict[str, int] = {}
+    for key in keys:
+        vals = [h[key] for h in halves
+                if isinstance(h.get(key), (int, float)) and not isinstance(h.get(key), bool)]
+        if vals:
+            out[key] = int(round(max(0, min(100, sum(vals) / len(vals)))))
+    return out
+
+
+def format_signals(signals) -> str:
+    """Render the raw repo signals as authoritative plain-language facts for the
+    report prompt — ground truth the model must not contradict. Every line is an
+    observed fact (no judgement), so the model can't claim "many TODOs" when the
+    count is 4 or invent missing CI. Tolerates a missing/empty signals dict."""
+    s = signals or {}
+    pinned = s.get("pinned_ratio")
+    pinned_str = "none declared" if pinned is None else f"{round(pinned * 100)}% of dependencies pinned"
+    days = s.get("days_since_commit")
+    if days is None:
+        commit_str = "unknown (not a git repo)"
+    else:
+        d = round(days)
+        commit_str = "today" if d == 0 else "1 day ago" if d == 1 else f"{d} days ago"
+    return "\n".join([
+        f"- CI/CD configured: {'Yes' if s.get('has_ci') else 'No'}",
+        f"- Test files: {s.get('test_files', 0)}",
+        f"- Source files: {s.get('source_files', 0)}",
+        f"- TODO/FIXME/HACK markers: {s.get('todo_count', 0)}",
+        f"- README: {s.get('readme_chars', 0)} chars, {s.get('readme_sections', 0)} sections",
+        f"- Dependencies: {pinned_str}",
+        f"- Last commit: {commit_str}",
+    ])
+
+
+def aggregate_scores(component_scores) -> Dict[str, Dict]:
+    """Combine the per-department reports of one project into a single scorecard
+    for the council synthesis: mean each grounded and judged dimension across
+    the components that carry it. ``_signals`` (for the activity line) is carried
+    from the first grounded half that has it. Empty in → empty halves out."""
+    grounded_halves = [(s or {}).get("grounded") or {} for s in (component_scores or [])]
+    judged_halves = [(s or {}).get("judged") or {} for s in (component_scores or [])]
+    grounded = _mean_per_key(grounded_halves, GROUNDED_KEYS)
+    signals = next((g["_signals"] for g in grounded_halves if g.get("_signals")), None)
+    if signals is not None:
+        grounded["_signals"] = signals
+    return {"grounded": grounded, "judged": _mean_per_key(judged_halves, JUDGED_KEYS)}
 
 
 def parse_judged_scores(text) -> Dict[str, int]:

@@ -119,6 +119,35 @@ def test_create_report_404_for_foreign_project(env):
     assert launched == []
 
 
+def test_run_full_council_queues_and_is_owner_scoped(env, monkeypatch):
+    client, _, _, _ = env
+    launched = []
+
+    async def fake_run_full(project_id, owner, **kw):
+        launched.append((project_id, owner))
+        return {"status": "draft", "report_id": "syn1", "components": 5}
+
+    monkeypatch.setattr(cr, "run_full_council", fake_run_full)
+    res = client.post("/api/council/run-full", json={"project_id": "p1"})
+    assert res.status_code == 200
+    assert res.json()["status"] == "running"
+    assert launched == [("p1", "vanders")]
+
+
+def test_run_full_council_404_for_foreign_project(env, monkeypatch):
+    client, _, _, _ = env
+    launched = []
+
+    async def fake_run_full(project_id, owner, **kw):
+        launched.append(project_id)
+        return {}
+
+    monkeypatch.setattr(cr, "run_full_council", fake_run_full)
+    res = client.post("/api/council/run-full", json={"project_id": "p2"})
+    assert res.status_code == 404
+    assert launched == []          # never spawns a run for someone else's project
+
+
 def test_report_type_registry_covers_all_departments_with_templates():
     assert set(cr.REPORT_TYPES) == {
         "developer_review", "market_opportunity", "launch_strategy",
@@ -129,7 +158,8 @@ def test_report_type_registry_covers_all_departments_with_templates():
         departments.add(department)
         assert title
         template = _runner.load_template(report_type)  # must exist on disk
-        for token in ("{project_name}", "{grounded_scores}", "{deep_summary}", "{rag_snippets}"):
+        for token in ("{project_name}", "{verified_facts}", "{repo_context}",
+                      "{deep_summary}", "{rag_snippets}"):
             assert token in template, f"{report_type} template missing {token}"
     assert departments == {"research", "business", "architect", "developer", "marketing"}
 
@@ -230,6 +260,63 @@ def test_approve_404_for_foreign_report(env):
     client, TestSession, _, _ = env
     _insert_report(TestSession, id="r3", owner="other", project_id="p2")
     assert client.post("/api/council/reports/r3/approve").status_code == 404
+
+
+def _seed_members(client, monkeypatch):
+    monkeypatch.setattr(cr, "queue_state", lambda: {"running": None, "queued": []})
+    client.get("/api/council/status")   # first council use seeds the five members
+
+
+def test_list_members_owner_scoped_and_editable_fields(env, monkeypatch):
+    client, TestSession, _, _ = env
+    _seed_members(client, monkeypatch)
+    db = TestSession()
+    db.add(CrewMember(id="mx", owner="other", name="Theirs", department="developer"))
+    db.commit()
+    db.close()
+
+    res = client.get("/api/council/members")
+    assert res.status_code == 200
+    members = res.json()["members"]
+    assert {m["department"] for m in members} == {
+        "research", "business", "architect", "developer", "marketing",
+    }
+    assert "mx" not in {m["id"] for m in members}     # never leaks another owner's
+    assert "personality" in members[0]                # editor needs the system prompt
+    assert "model" in members[0] and "endpoint_url" in members[0]
+
+
+def test_update_member_edits_fields_without_touching_department(env, monkeypatch):
+    client, TestSession, _, _ = env
+    _seed_members(client, monkeypatch)
+    db = TestSession()
+    mid = (db.query(CrewMember)
+           .filter(CrewMember.owner == "vanders", CrewMember.department == "developer")
+           .first().id)
+    db.close()
+
+    res = client.put(f"/api/council/members/{mid}", json={
+        "name": "Ada", "personality": "Be sharp.", "model": "qwen",
+        "endpoint_url": "http://x"})
+    assert res.status_code == 200
+    db = TestSession()
+    row = db.get(CrewMember, mid)
+    assert row.name == "Ada"
+    assert row.personality == "Be sharp."
+    assert row.model == "qwen"
+    assert row.endpoint_url == "http://x"
+    assert row.department == "developer"     # department is never reset by an edit
+    db.close()
+
+
+def test_update_member_404_for_foreign_member(env, monkeypatch):
+    client, TestSession, _, _ = env
+    db = TestSession()
+    db.add(CrewMember(id="mx", owner="other", name="Theirs", department="developer"))
+    db.commit()
+    db.close()
+    res = client.put("/api/council/members/mx", json={"name": "Hacked"})
+    assert res.status_code == 404
 
 
 def test_status_seeds_personas_and_reports_all_ready_when_idle(env, monkeypatch):

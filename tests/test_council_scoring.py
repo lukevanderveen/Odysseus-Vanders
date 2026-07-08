@@ -11,7 +11,9 @@ import time
 import pytest
 
 from services.council.scoring import (
+    aggregate_scores,
     compute_signals,
+    format_signals,
     grounded_scores,
     parse_judged_scores,
     recent_activity_score,
@@ -158,6 +160,88 @@ def test_parse_judged_scores_clamps_and_drops_unknown():
 
 def test_parse_judged_scores_drops_non_numeric():
     assert parse_judged_scores('{"monetisation_clarity": "high"}') == {}
+
+
+# ── verified-facts formatting (anti-hallucination grounding) ────────────────
+
+def test_format_signals_renders_authoritative_facts():
+    facts = format_signals({
+        "has_ci": False, "test_files": 12, "source_files": 340,
+        "todo_count": 4, "readme_chars": 2300, "readme_sections": 5,
+        "pinned_ratio": 0.5, "days_since_commit": 2,
+    })
+    assert "CI/CD configured: No" in facts
+    assert "Test files: 12" in facts
+    assert "TODO/FIXME/HACK markers: 4" in facts   # the exact count, never "many"
+    assert "50%" in facts
+    assert "2 days ago" in facts
+
+
+def test_format_signals_marks_unknown_git_and_no_deps():
+    facts = format_signals({
+        "has_ci": True, "test_files": 0, "source_files": 0, "todo_count": 0,
+        "readme_chars": 0, "readme_sections": 0,
+        "pinned_ratio": None, "days_since_commit": None,
+    })
+    assert "CI/CD configured: Yes" in facts
+    assert "not a git repo" in facts        # absence shown as absence, not invented
+    assert "none declared" in facts
+
+
+def test_format_signals_tolerates_empty_signals():
+    # never raises on a missing/empty signals dict
+    assert isinstance(format_signals({}), str)
+    assert isinstance(format_signals(None), str)
+
+
+# ── aggregate scores (council synthesis) ─────────────────────────────────────
+
+def test_aggregate_scores_means_each_dimension_across_components():
+    out = aggregate_scores([
+        {"grounded": {"technical_readiness": 80, "recent_activity": 60},
+         "judged": {"marketability": 50}},
+        {"grounded": {"technical_readiness": 80, "recent_activity": 60},
+         "judged": {"marketability": 70}},
+    ])
+    assert out["grounded"]["technical_readiness"] == 80
+    assert out["grounded"]["recent_activity"] == 60
+    assert out["judged"]["marketability"] == 60  # (50+70)/2
+
+
+def test_aggregate_scores_averages_only_components_that_scored_a_key():
+    out = aggregate_scores([
+        {"grounded": {}, "judged": {"launch_readiness": 80}},
+        {"grounded": {}, "judged": {"marketability": 40}},
+    ])
+    # each key seen once → its own value, never diluted by absent components
+    assert out["judged"]["launch_readiness"] == 80
+    assert out["judged"]["marketability"] == 40
+
+
+def test_aggregate_scores_rounds_and_clamps_to_int():
+    out = aggregate_scores([
+        {"grounded": {"technical_readiness": 33}, "judged": {"marketability": 55}},
+        {"grounded": {"technical_readiness": 34}, "judged": {"marketability": 56}},
+    ])
+    assert out["grounded"]["technical_readiness"] == 34  # round((33+34)/2) = 34
+    assert isinstance(out["judged"]["marketability"], int)
+
+
+def test_aggregate_scores_preserves_signals_for_explainability():
+    out = aggregate_scores([
+        {"grounded": {"technical_readiness": 70, "_signals": {"days_since_commit": 3}},
+         "judged": {}},
+        {"grounded": {"technical_readiness": 70, "_signals": {"days_since_commit": 9}},
+         "judged": {}},
+    ])
+    assert out["grounded"]["_signals"]["days_since_commit"] == 3  # from first
+
+
+def test_aggregate_scores_empty_returns_empty_halves():
+    assert aggregate_scores([]) == {"grounded": {}, "judged": {}}
+    assert aggregate_scores([{"grounded": {}, "judged": {}}]) == {
+        "grounded": {}, "judged": {},
+    }
 
 
 def test_parse_judged_scores_accepts_all_council_dimensions():

@@ -152,6 +152,61 @@ def test_office_layout_places_nodes_on_ellipse_within_bounds(node_available):
     assert out["empty"] == []
 
 
+def test_radar_chart_svg_renders_polygon_and_axis_labels(node_available):
+    script = textwrap.dedent("""
+        const { radarChartSvg } = await import('./static/js/councilLogic.js');
+        const esc = (s) => (s || '').replace(/[&<>"']/g, '');
+        const entries = [
+          { label: 'Technical readiness', value: 72, judged: false },
+          { label: 'Recent activity', value: 40, judged: false },
+          { label: 'Launch readiness', value: 55, judged: true },
+          { label: 'Marketability', value: 60, judged: true },
+        ];
+        console.log(JSON.stringify({
+          html: radarChartSvg(entries, esc),
+          tooFew: radarChartSvg(entries.slice(0, 2), esc),
+          empty: radarChartSvg([], esc),
+          nullish: radarChartSvg(null, esc),
+        }));
+    """)
+    out = _run_node(script)
+    assert out["tooFew"] == ""     # a radar needs at least 3 axes
+    assert out["empty"] == ""
+    assert out["nullish"] == ""
+    html = out["html"]
+    assert "<svg" in html and "viewBox" in html
+    assert "<polygon" in html                       # the data shape
+    assert html.count("radar-axis-label") == 4      # one label per dimension
+    assert "Technical readiness" in html
+
+
+def test_member_edit_payload_normalises_blank_fields(node_available):
+    script = textwrap.dedent("""
+        const { memberEditPayload } = await import('./static/js/councilLogic.js');
+        console.log(JSON.stringify({
+          full: memberEditPayload({ name: '  Ada ', personality: 'Sharp.', model: 'qwen', endpoint: 'http://x' }),
+          blankName: memberEditPayload({ name: '   ', personality: '', model: '', endpoint: '' }),
+        }));
+    """)
+    out = _run_node(script)
+    assert out["full"] == {
+        "name": "Ada", "personality": "Sharp.", "model": "qwen", "endpoint_url": "http://x",
+    }
+    # a blank name is dropped (never blanks the member); empty selects → null
+    assert out["blankName"] == {
+        "name": None, "personality": "", "model": None, "endpoint_url": None,
+    }
+
+
+def test_dept_colors_include_council_meta_department(node_available):
+    script = textwrap.dedent("""
+        const { DEPT_COLORS } = await import('./static/js/councilLogic.js');
+        console.log(JSON.stringify({ council: DEPT_COLORS.council || null }));
+    """)
+    out = _run_node(script)
+    assert out["council"]          # the synthesis department has its own colour
+
+
 def test_overall_score_means_all_dimensions(node_available):
     script = textwrap.dedent("""
         const { overallScore } = await import('./static/js/councilLogic.js');
@@ -168,6 +223,68 @@ def test_overall_score_means_all_dimensions(node_available):
     assert out["mixed"] == 60  # (80+40+60)/3
     assert out["empty"] is None
     assert out["nullish"] is None
+
+
+def test_project_health_summarises_card_facts(node_available):
+    script = textwrap.dedent("""
+        const { projectHealth } = await import('./static/js/councilLogic.js');
+        const reports = [
+          { id: 'syn', status: 'draft', created_at: '2026-06-06',
+            scores: { grounded: { technical_readiness: 80, recent_activity: 40, _signals: { days_since_commit: 3 } },
+                      judged: { marketability: 60 } } },
+          { id: 'd1', status: 'approved', created_at: '2026-06-05',
+            scores: { grounded: { technical_readiness: 50 }, judged: {} } },
+          { id: 'r1', status: 'running', created_at: '2026-06-06', scores: {} },
+        ];
+        console.log(JSON.stringify({
+          full: projectHealth(reports),
+          empty: projectHealth([]),
+          nullish: projectHealth(null),
+        }));
+    """)
+    out = _run_node(script)
+    assert out["full"] == {
+        "score": 60,            # newest scored report (syn): (80+40+60)/3
+        "reviewCount": 3,
+        "draftCount": 1,        # one report awaiting approval
+        "lastCommitDays": 3,
+    }
+    assert out["empty"] == {"score": None, "reviewCount": 0, "draftCount": 0, "lastCommitDays": None}
+    assert out["nullish"] == {"score": None, "reviewCount": 0, "draftCount": 0, "lastCommitDays": None}
+
+
+def test_next_shader_mode_toggles_subtle_and_bold(node_available):
+    script = textwrap.dedent("""
+        const { nextShaderMode } = await import('./static/js/councilLogic.js');
+        console.log(JSON.stringify({
+          fromSubtle: nextShaderMode('subtle'),
+          fromBold: nextShaderMode('bold'),
+          fromUnknown: nextShaderMode('???'),
+        }));
+    """)
+    out = _run_node(script)
+    assert out["fromSubtle"] == "bold"
+    assert out["fromBold"] == "subtle"
+    assert out["fromUnknown"] == "subtle"   # anything not bold settles to subtle
+
+
+def test_commit_age_label_reads_naturally(node_available):
+    script = textwrap.dedent("""
+        const { commitAgeLabel } = await import('./static/js/councilLogic.js');
+        console.log(JSON.stringify({
+          today: commitAgeLabel(0),
+          yesterday: commitAgeLabel(1),
+          days: commitAgeLabel(3.4),
+          missing: commitAgeLabel(null),
+          undef: commitAgeLabel(undefined),
+        }));
+    """)
+    out = _run_node(script)
+    assert out["today"] == "today"
+    assert out["yesterday"] == "yesterday"
+    assert out["days"] == "3 days ago"
+    assert out["missing"] is None
+    assert out["undef"] is None
 
 
 def test_latest_scored_report_picks_newest_with_scores(node_available):
@@ -190,6 +307,94 @@ def test_latest_scored_report_picks_newest_with_scores(node_available):
     assert out["picked"] == "new-scored"
     assert out["none"] is None
     assert out["empty"] is None
+
+
+def test_stack_panel_renders_radar_actions_and_body_for_a_draft_overview(node_available):
+    script = textwrap.dedent("""
+        const { stackPanelHtml } = await import('./static/js/councilStack.js');
+        const esc = (s) => (s || '').replace(/[&<>"']/g, '');
+        const overview = { id: 'syn', report_type: 'council_review', department: 'council',
+          status: 'draft', title: 'Council Review: P',
+          scores: { grounded: { technical_readiness: 72, recent_activity: 40, _signals: {} },
+                    judged: { launch_readiness: 55, marketability: 60 } } };
+        console.log(JSON.stringify({
+          actionable: stackPanelHtml(overview, esc, { showActions: true }),
+          readonly: stackPanelHtml(overview, esc, { showActions: false }),
+        }));
+    """)
+    out = _run_node(script)
+    a = out["actionable"]
+    assert "Council Review: P" in a
+    assert "radar-chart" in a                      # council_review gets the radar
+    assert 'data-action="approve"' in a            # a draft is actionable when allowed
+    assert 'data-action="dismiss"' in a
+    assert 'data-body-for="syn"' in a              # body loads on demand
+    # the same panel, read-only, drops the approve/dismiss controls
+    assert 'data-action="approve"' not in out["readonly"]
+
+
+def test_stack_panel_hides_body_and_actions_while_running(node_available):
+    script = textwrap.dedent("""
+        const { stackPanelHtml } = await import('./static/js/councilStack.js');
+        const esc = (s) => (s || '').replace(/[&<>"']/g, '');
+        const running = { id: 'r1', report_type: 'marketing_audit', department: 'marketing',
+          status: 'running', title: 'Marketing Audit: P', scores: {} };
+        const errored = { id: 'e1', report_type: 'architecture_review', department: 'architect',
+          status: 'error', title: 'Arch: P', error: 'boom', scores: {} };
+        const devApproved = { id: 'd1', report_type: 'developer_review', department: 'developer',
+          status: 'approved', title: 'Dev: P', scores: { grounded: { technical_readiness: 72 }, judged: {} } };
+        console.log(JSON.stringify({
+          running: stackPanelHtml(running, esc, { showActions: true }),
+          errored: stackPanelHtml(errored, esc, { showActions: true }),
+          dev: stackPanelHtml(devApproved, esc, { showActions: true }),
+        }));
+    """)
+    out = _run_node(script)
+    # a running report has no body to load and nothing to approve yet
+    assert 'data-body-for' not in out["running"]
+    assert 'data-action="approve"' not in out["running"]
+    # an error surfaces its message, still no body
+    assert "boom" in out["errored"]
+    assert 'data-body-for' not in out["errored"]
+    # a non-council, settled report: body yes, no radar, no approve (not a draft)
+    assert 'data-body-for="d1"' in out["dev"]
+    assert "radar-chart" not in out["dev"]
+    assert 'data-action="approve"' not in out["dev"]
+
+
+def test_stack_html_builds_tabbed_stack_overview_first(node_available):
+    script = textwrap.dedent("""
+        const { stackHtml } = await import('./static/js/councilStack.js');
+        const esc = (s) => (s || '').replace(/[&<>"']/g, '');
+        const overview = { id: 'syn', report_type: 'council_review', department: 'council',
+          status: 'draft', title: 'Council Review: P', created_at: '2026-06-06',
+          scores: { grounded: { technical_readiness: 72, recent_activity: 40, _signals: {} },
+                    judged: { launch_readiness: 55, marketability: 60 } } };
+        const dev = { id: 'd1', report_type: 'developer_review', department: 'developer',
+          status: 'approved', title: 'Developer Review: P', created_at: '2026-06-05',
+          scores: { grounded: { technical_readiness: 72 }, judged: {} } };
+        const group = { projectId: 'p1', name: 'My Project', reports: [dev, overview] };
+        console.log(JSON.stringify({
+          deflt: stackHtml(group, esc, { showActions: true }),
+          devTab: stackHtml(group, esc, { showActions: true, activeType: 'developer_review' }),
+          empty: stackHtml({ projectId: 'p', name: 'P', reports: [] }, esc, {}),
+        }));
+    """)
+    out = _run_node(script)
+    assert out["empty"] == ""
+    d = out["deflt"]
+    assert 'data-project-id="p1"' in d
+    assert "My Project" in d
+    assert d.count("report-tab") >= 2                       # one tab per report type
+    assert 'data-report-tab="council_review"' in d
+    assert 'data-report-tab="developer_review"' in d
+    # Overview (synthesis) is the default active panel: its radar + draft actions show
+    assert "radar-chart" in d
+    assert 'data-action="approve"' in d
+    # switching the active tab to the developer review swaps the panel
+    dev = out["devTab"]
+    assert 'data-body-for="d1"' in dev
+    assert "radar-chart" not in dev                         # developer review has no radar
 
 
 def test_filter_history_by_department_and_project(node_available):

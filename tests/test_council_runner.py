@@ -102,18 +102,40 @@ async def test_run_report_happy_path_lands_in_draft(db_factory):
     assert notes[0]["owner"] == "vanders"
 
 
-async def test_run_report_prompt_includes_project_context(db_factory):
+async def test_run_report_prompt_grounds_in_facts_and_repo_structure(db_factory):
     seen = {}
 
     async def fake_complete(messages):
         seen["user"] = messages[-1]["content"]
         return GOOD_OUTPUT
 
-    await runner.run_report("r1", complete=fake_complete, session_factory=db_factory, retrieve=fake_retrieve,
-                            notify=lambda **kw: None)
-    assert "odysseus" in seen["user"]
-    assert "Workspace app." in seen["user"]          # deep_summary fed in
-    assert "technical_readiness" in seen["user"]     # grounded signals fed in
+    await runner.run_report(
+        "r1", complete=fake_complete, session_factory=db_factory, retrieve=fake_retrieve,
+        context_builder=lambda path: "REPO_TREE_MARKER", notify=lambda **kw: None)
+    p = seen["user"]
+    assert "odysseus" in p
+    assert "Workspace app." in p                  # deep_summary fed in
+    assert "Verified repository facts" in p        # authoritative facts block present
+    assert "CI/CD configured" in p                 # a concrete signal, as prose not JSON
+    assert "REPO_TREE_MARKER" in p                 # real repo structure fed in, not just a digest
+
+
+async def test_run_report_retrieves_evidence_per_concern(db_factory):
+    queries = []
+
+    def cap_retrieve(project_id, query, n=6):
+        queries.append(query)
+        return f"chunk for {query}"
+
+    async def fake_complete(messages):
+        return GOOD_OUTPUT
+
+    await runner.run_report(
+        "r1", complete=fake_complete, session_factory=db_factory, retrieve=cap_retrieve,
+        context_builder=lambda path: "", notify=lambda **kw: None)
+    assert len(queries) >= 3            # several targeted queries, not one generic sweep
+    joined = " ".join(queries).lower()
+    assert "test" in joined and ("ci" in joined or "build" in joined)
 
 
 async def test_run_report_error_path_persists_error(db_factory):
@@ -196,6 +218,75 @@ async def test_queue_state_tracks_running_and_queued(db_factory):
     state = runner.queue_state()
     assert state["running"] is None
     assert state["queued"] == []
+
+
+def _add_project(db_factory, tmp_path, pid="p2"):
+    proj_dir = tmp_path / pid          # distinct path: projects are unique per (owner, path)
+    proj_dir.mkdir()
+    db = db_factory()
+    db.add(Project(id=pid, owner="vanders", name="freshproj",
+                   path=str(proj_dir), deep_summary="## Purpose\nThing."))
+    db.commit()
+    db.close()
+
+
+async def test_run_full_council_drafts_synthesis_over_approved_components(db_factory, tmp_path):
+    _add_project(db_factory, tmp_path, "p2")
+
+    async def fake_complete(messages):
+        return GOOD_OUTPUT
+
+    result = await runner.run_full_council(
+        "p2", "vanders", complete=fake_complete, session_factory=db_factory,
+        retrieve=fake_retrieve, context_builder=lambda path: "", notify=lambda **kw: None)
+    assert result["status"] == "draft"
+    assert result["components"] == 5
+
+    db = db_factory()
+    try:
+        components = db.query(Report).filter(
+            Report.project_id == "p2",
+            Report.report_type.in_(list(runner.COMPONENT_TYPES)),
+        ).all()
+        assert len(components) == 5
+        # components are kept (approved) so they never flood the approval inbox
+        assert all(c.status == "approved" for c in components)
+
+        synth = db.query(Report).filter(
+            Report.project_id == "p2", Report.report_type == "council_review").one()
+        assert synth.status == "draft"            # the synthesis alone awaits approval
+        assert synth.department == "council"
+        import json
+        scores = json.loads(synth.scores)
+        # every component returned the same judged scores → aggregated to them
+        assert scores["judged"] == {"monetisation_clarity": 40, "marketability": 65}
+        assert "technical_readiness" in scores["grounded"]
+    finally:
+        db.close()
+
+
+async def test_run_full_council_synthesis_prompt_includes_member_reports(db_factory, tmp_path):
+    _add_project(db_factory, tmp_path, "p2")
+    seen = []
+
+    async def fake_complete(messages):
+        seen.append(messages[-1]["content"])
+        return GOOD_OUTPUT
+
+    await runner.run_full_council(
+        "p2", "vanders", complete=fake_complete, session_factory=db_factory,
+        retrieve=fake_retrieve, context_builder=lambda path: "", notify=lambda **kw: None)
+    synthesis_prompt = seen[-1]          # the synthesis is the final completion
+    assert "Department reviews" in synthesis_prompt
+    assert "Solid codebase" in synthesis_prompt   # a component body fed in
+    assert "developer" in synthesis_prompt
+
+
+async def test_run_full_council_missing_project_errors(db_factory):
+    result = await runner.run_full_council(
+        "nope", "vanders", complete=lambda m: None, session_factory=db_factory,
+        retrieve=fake_retrieve, notify=lambda **kw: None)
+    assert result["status"] == "error"
 
 
 async def test_runs_serialise_on_the_queue(db_factory):

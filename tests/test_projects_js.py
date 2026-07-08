@@ -112,6 +112,48 @@ def test_newly_drafted_detects_running_to_draft_transition(node_available):
     assert out["empty"] == []
 
 
+def test_reports_by_project_groups_preserving_first_seen_order(node_available):
+    script = textwrap.dedent("""
+        const { reportsByProject } = await import('./static/js/projectsLogic.js');
+        const groups = reportsByProject([
+          { id: 'a', project_id: 'p1' },
+          { id: 'b', project_id: 'p2' },
+          { id: 'c', project_id: 'p1' },
+        ]);
+        console.log(JSON.stringify(groups.map(g => ({ pid: g.projectId, ids: g.reports.map(r => r.id) }))));
+    """)
+    out = _run_node(script)
+    assert out == [
+        {"pid": "p1", "ids": ["a", "c"]},
+        {"pid": "p2", "ids": ["b"]},
+    ]
+
+
+def test_council_tabs_overview_first_and_latest_per_type(node_available):
+    script = textwrap.dedent("""
+        const { councilTabs } = await import('./static/js/projectsLogic.js');
+        const tabs = councilTabs([
+          { id: 'd1', report_type: 'developer_review', department: 'developer', status: 'approved', created_at: '2026-06-01' },
+          { id: 'd2', report_type: 'developer_review', department: 'developer', status: 'approved', created_at: '2026-06-05' },
+          { id: 'm1', report_type: 'marketing_audit', department: 'marketing', status: 'approved', created_at: '2026-06-02' },
+          { id: 'syn', report_type: 'council_review', department: 'council', status: 'draft', created_at: '2026-06-06' },
+        ]);
+        console.log(JSON.stringify({
+          types: tabs.map(t => t.type),
+          first: tabs[0],
+          dev: tabs.find(t => t.type === 'developer_review'),
+          empty: councilTabs([]),
+        }));
+    """)
+    out = _run_node(script)
+    # Overview (synthesis) leads; then the fixed department order
+    assert out["types"] == ["council_review", "developer_review", "marketing_audit"]
+    assert out["first"]["label"] == "Overview"
+    assert out["dev"]["reportId"] == "d2"      # newest report wins its type's tab
+    assert out["dev"]["label"] == "Developer"
+    assert out["empty"] == []
+
+
 def test_sort_projects_alphabetical_missing_last(node_available):
     script = textwrap.dedent("""
         const { sortProjects } = await import('./static/js/projectsLogic.js');

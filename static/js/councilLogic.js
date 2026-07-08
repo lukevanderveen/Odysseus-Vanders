@@ -10,6 +10,7 @@ export const DEPT_COLORS = {
   architect: '#5b8abf',
   developer: '#5dbf6e',
   marketing: '#d873a8',
+  council: '#9cdef2',   // the unified-synthesis "department" (matches --fg accent)
 };
 
 // status: "Ready" | "Waiting" | "Busy" from GET /api/council/status.
@@ -102,6 +103,32 @@ export const latestScoredReport = (reports) => {
   )[0];
 };
 
+// Office background shader intensity toggle: subtle underlay ⇄ bold full-bleed.
+// Anything that isn't already "bold" settles to "subtle" (the safe default).
+export const nextShaderMode = (cur) => (cur === 'subtle' ? 'bold' : cur === 'bold' ? 'subtle' : 'subtle');
+
+// Human commit-age from a day count (scores.grounded._signals.days_since_commit).
+// Null when there is no signal — callers show their own "unknown" copy.
+export const commitAgeLabel = (days) => {
+  if (days === null || days === undefined) return null;
+  const d = Math.round(days);
+  return d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
+};
+
+// At-a-glance facts for a project card: the headline /100 from its newest
+// scored report, how many reports it has, how many await approval, and the
+// last-commit age captured at score time. reports = that project's reports.
+export const projectHealth = (reports) => {
+  const list = reports || [];
+  const latest = latestScoredReport(list);
+  return {
+    score: latest ? overallScore(latest.scores) : null,
+    reviewCount: list.length,
+    draftCount: list.filter((r) => r.status === 'draft').length,
+    lastCommitDays: latest?.scores?.grounded?._signals?.days_since_commit ?? null,
+  };
+};
+
 // Atlas-style labelled score bars; pure string builder so it's Node-testable
 // and shareable between the Projects and Council modals. esc is the caller's
 // HTML escaper.
@@ -116,4 +143,55 @@ export const scoreBarsHtml = (scores, esc) => {
       <span class="score-bar-val">${esc(String(e.value))}</span>
     </div>`).join('');
   return `<div class="score-bars">${rows}</div>`;
+};
+
+// Council member editor (card #10): normalise raw form values into the PUT
+// payload. A blank name is dropped (so an edit never blanks the member); empty
+// model/endpoint selects become null (clear the override).
+export const memberEditPayload = (v = {}) => ({
+  name: (v.name || '').trim() || null,
+  personality: v.personality ?? null,
+  model: v.model || null,
+  endpoint_url: v.endpoint || null,
+});
+
+// Hand-rolled SVG radar/spider chart over the score dimensions — the council
+// scorecard's "fancier" view. Pure string builder (Node-testable); needs ≥3
+// axes to form a polygon, returns '' otherwise. entries: scoreEntries() output;
+// esc is the caller's HTML escaper (string-only). opts.color sets the fill hue.
+export const radarChartSvg = (entries, esc, opts = {}) => {
+  const dims = (entries || []).filter((e) => Number.isFinite(e.value));
+  if (dims.length < 3) return '';
+  const color = opts.color || 'var(--fg)';
+  const cx = 110;
+  const cy = 100;
+  const maxR = 70;
+  const n = dims.length;
+  const angle = (i) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
+  const pt = (i, r) => [
+    +(cx + r * Math.cos(angle(i))).toFixed(1),
+    +(cy + r * Math.sin(angle(i))).toFixed(1),
+  ];
+  const ring = (level) =>
+    dims.map((_, i) => pt(i, maxR * level).join(',')).join(' ');
+  const grids = [0.25, 0.5, 0.75, 1].map((l) =>
+    `<polygon class="radar-grid" points="${ring(l)}"/>`).join('');
+  const spokes = dims.map((_, i) => {
+    const [x, y] = pt(i, maxR);
+    return `<line class="radar-spoke" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"/>`;
+  }).join('');
+  const dataPts = dims.map((e, i) =>
+    pt(i, (Math.max(0, Math.min(100, e.value)) / 100) * maxR).join(',')).join(' ');
+  const labels = dims.map((e, i) => {
+    const [x, y] = pt(i, maxR + 14);
+    const anchor = x > cx + 1 ? 'start' : x < cx - 1 ? 'end' : 'middle';
+    return `<text class="radar-axis-label" x="${x}" y="${y}" text-anchor="${anchor}"
+      >${esc(e.label)}${e.judged ? ' (AI)' : ''}</text>`;
+  }).join('');
+  return `
+    <svg class="radar-chart" viewBox="0 0 220 200" style="--radar-color:${color}">
+      ${grids}${spokes}
+      <polygon class="radar-area" points="${dataPts}"/>
+      ${labels}
+    </svg>`;
 };

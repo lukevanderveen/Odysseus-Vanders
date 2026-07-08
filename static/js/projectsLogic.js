@@ -52,6 +52,56 @@ export const newlyDrafted = (prevRunningIds, reports) => {
     .map((r) => r.id);
 };
 
+// Consolidated per-project report stack: one tab per report type, the synthesis
+// "Overview" first, then a fixed department order. Short tab labels keep the
+// stack compact (the full titles live on each report row).
+const TAB_LABELS = {
+  council_review: 'Overview',
+  developer_review: 'Developer',
+  market_opportunity: 'Research',
+  architecture_review: 'Architecture',
+  launch_strategy: 'Business',
+  marketing_audit: 'Marketing',
+};
+const TAB_ORDER = Object.keys(TAB_LABELS);
+
+// Group a flat report list by project, preserving first-seen project order.
+export const reportsByProject = (reports) => {
+  const order = [];
+  const byId = new Map();
+  for (const r of reports || []) {
+    const pid = r.project_id;
+    if (!byId.has(pid)) { byId.set(pid, []); order.push(pid); }
+    byId.get(pid).push(r);
+  }
+  return order.map((pid) => ({ projectId: pid, reports: byId.get(pid) }));
+};
+
+// One project's reports → ordered tab descriptors (latest report per type).
+export const councilTabs = (projectReports) => {
+  const latest = new Map();
+  for (const r of projectReports || []) {
+    const type = r.report_type || 'developer_review';
+    const cur = latest.get(type);
+    if (!cur || String(r.created_at || '').localeCompare(String(cur.created_at || '')) > 0) {
+      latest.set(type, r);
+    }
+  }
+  const rank = (t) => {
+    const i = TAB_ORDER.indexOf(t);
+    return i === -1 ? TAB_ORDER.length : i;
+  };
+  return [...latest.values()]
+    .sort((a, b) => rank(a.report_type) - rank(b.report_type))
+    .map((r) => ({
+      type: r.report_type,
+      reportId: r.id,
+      department: r.department || '',
+      label: TAB_LABELS[r.report_type] || r.report_type,
+      status: r.status,
+    }));
+};
+
 // Alphabetical (case-insensitive); projects whose path vanished sink to the end.
 export const sortProjects = (projects) =>
   [...projects].sort((a, b) => {
