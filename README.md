@@ -248,6 +248,21 @@ Local GPU *serving* of vLLM/SGLang needs Linux/WSL2; for a local model on Window
 Open `http://localhost:7000`, log in with the generated admin password,
 and configure everything else inside **Settings**.
 
+**Desktop icon (app window).** After the first `launch-windows.ps1` run, add an
+Odysseus icon to your desktop that opens the workspace in its own chrome-less
+window instead of a browser tab:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\create-desktop-shortcut.ps1          # desktop only
+powershell -ExecutionPolicy Bypass -File .\create-desktop-shortcut.ps1 -StartMenu
+```
+
+Double-clicking the icon runs `odysseus-desktop.ps1`: it reuses a running
+server or starts one hidden (plus ChromaDB if installed), waits for
+`/api/health`, then opens an Edge/Chrome/Brave `--app` window with its own
+profile under `data\desktop-browser-profile`. Closing that window stops the
+server it started. Logs go to `logs\odysseus-app.*.log`.
+
 ## Security Notes
 Odysseus is a self-hosted workspace with powerful local tools: shell access, file uploads, model downloads, web research, email/calendar integrations, and API tokens. Treat it like an admin console.
 
