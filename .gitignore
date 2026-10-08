@@ -18,6 +18,8 @@ venv/
 
 # Data — all user data stays local
 data/
+# Local model stores (Ollama + HuggingFace cache) — never pushed
+models/
 !services/hwfit/data/
 !services/hwfit/data/hf_models.json
 logs/

@@ -444,8 +444,11 @@ class McpManager:
             label = f"{server_name} ({identity})" if identity else server_name
             lines.append(f"\n**{label}:**")
             for t in server_tools:
-                # Truncate long descriptions
-                desc = t['description'][:120] + '...' if len(t['description']) > 120 else t['description']
+                # Collapse embedded newlines/bullets (Spotify-style "- get: ..."
+                # action lists) so every tool stays on exactly one line — the
+                # tool index parses this text line by line. Then truncate.
+                desc = " ".join((t.get('description') or "").split())
+                desc = desc[:120] + '...' if len(desc) > 120 else desc
                 lines.append(f"  - {t['qualified_name']}: {desc}")
 
         result = "\n".join(lines)

@@ -225,6 +225,7 @@ class ToolIndex:
         docs = []
         ids = []
         metadatas = []
+        seen_ids: Set[str] = set()
         current_server = ""
         for line in all_tools.strip().split("\n"):
             line = line.strip()
@@ -237,6 +238,11 @@ class ToolIndex:
                 if len(name_desc) == 2:
                     name = name_desc[0].strip()
                     desc = name_desc[1].strip()
+                    # Chroma rejects an upsert with repeated ids; keep the
+                    # first occurrence so one odd line can't sink the index.
+                    if f"mcp_{name}" in seen_ids:
+                        continue
+                    seen_ids.add(f"mcp_{name}")
                     # Include server identity in the indexed text so RAG can
                     # distinguish "list_emails for server-a" from "list_emails for server-b"
                     server_ctx = f" (server: {current_server})" if current_server else ""
