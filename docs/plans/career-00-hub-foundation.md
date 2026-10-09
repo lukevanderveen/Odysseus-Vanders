@@ -29,7 +29,7 @@
 **Interfaces:**
 - Produces: `JobApplication`, `JobApplicationEvent`, `ApplicationReview`, `CareerPost` ORM classes with the columns below. Later plans import them from `core.database`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_models.py
@@ -123,12 +123,12 @@ def test_review_and_post_defaults(db_factory):
     db.close()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_models.py -v`
 Expected: FAIL with `AttributeError: module 'core.database' has no attribute 'JobApplication'`
 
-- [ ] **Step 3: Add the models**
+- [x] **Step 3: Add the models**
 
 Append to `core/database.py` directly after `class Report(...)` (before `class CalendarCal`):
 
@@ -224,12 +224,12 @@ class CareerPost(TimestampMixin, Base):
     posted_at   = Column(DateTime, nullable=True)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_models.py -v`
 Expected: 3 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add core/database.py tests/test_career_models.py
@@ -248,7 +248,7 @@ git commit -m "feat(career): add job application, event, review and post tables"
 **Interfaces:**
 - Produces: `DEFAULTS: dict`, `settings_path(owner) -> str`, `load_career_settings(owner) -> dict`, `save_career_settings(owner, updates) -> dict`. Every later plan reads settings through `load_career_settings(owner)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_settings.py
@@ -297,12 +297,12 @@ def test_integer_fields_are_coerced_and_bounded(data_dir):
     assert out["ghosted_after_days"] == 1
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_settings.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create an empty `services/career/__init__.py`, then:
 
@@ -392,12 +392,12 @@ def save_career_settings(owner: Optional[str], updates: Dict[str, Any]) -> Dict[
     return current
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_settings.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/__init__.py services/career/settings.py tests/test_career_settings.py
@@ -416,7 +416,7 @@ git commit -m "feat(career): per-owner settings file with defaults"
 - Consumes: `src.endpoint_resolver.resolve_endpoint(prefix, owner=None) -> (url, model, headers)`, `resolve_utility_fallback_candidates(owner=None) -> list`, `src.llm_core.llm_call_async_with_fallback(candidates, messages, **kw) -> str` (same calls as `services/council/runner.py:125-136`).
 - Produces: `async complete(messages, owner=None) -> str` (Task endpoint, then utility fallbacks; timeout 900, max_tokens 4000), `async complete_utility(messages, owner=None, max_tokens=800) -> str` (Utility endpoint first, then Task, then fallbacks; timeout 120 — for cheap classification), `render_template(template, mapping) -> str` (replaces only known `{key}` tokens). Plans 01–04 all import these; none defines its own.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_llm.py
@@ -471,12 +471,12 @@ def test_render_template_replaces_only_known_keys():
     assert out == "Hi Luke, {\"json\": 1} {unknown} Luke"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_llm.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.llm'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/llm.py
@@ -524,12 +524,12 @@ def render_template(template: str, mapping: Dict[str, str]) -> str:
     return out
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_llm.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/llm.py tests/test_career_llm.py
@@ -548,7 +548,7 @@ git commit -m "feat(career): shared LLM completion helper and template renderer"
 **Interfaces:**
 - Produces: `extract_text_for_upload(file_path: str, raw: bytes) -> str` — PDF via pypdf, markitdown formats via `extract_office_text`, everything else UTF-8 decoded. Task 7's CV route reuses it.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_personal_upload_text.py
@@ -582,12 +582,12 @@ def test_upload_route_uses_shared_extractor():
     assert 'if ext == ".pdf":' not in src
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_personal_upload_text.py -v`
 Expected: FAIL with `AttributeError: module 'src.personal_docs' has no attribute 'extract_text_for_upload'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/personal_docs.py`, after `extract_office_text`:
 
@@ -624,12 +624,12 @@ with:
                 text = extract_text_for_upload(file_path, content_bytes)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_personal_upload_text.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/personal_docs.py routes/personal_routes.py tests/test_personal_upload_text.py
@@ -648,7 +648,7 @@ git commit -m "fix(personal): extract text from docx/pptx/xlsx uploads via marki
 - Consumes: `routes.personal_routes._personal_upload_dir_for_owner(owner)`, `_unique_personal_upload_path(upload_dir, original_name)`; `src.personal_docs.extract_text_for_upload`.
 - Produces: `store_personal_file(rag, owner, original_name, raw: bytes) -> dict` returning `{"filename", "stored_filename", "path", "chunks"}`; `list_personal_files(owner, prefix) -> list[dict]`; `delete_personal_file(rag, owner, filename) -> bool`. Task 7 (CV + examples) and plan 01 (evidence) use the `filename` prefix convention: `cv-*` and `cover-letter-example-*`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_personal_files.py
@@ -714,12 +714,12 @@ def test_delete_removes_file_and_chunks(uploads):
     assert pf.delete_personal_file(rag, "vanders", "missing.md") is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_personal_files.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.personal_files'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/personal_files.py
@@ -822,12 +822,12 @@ def delete_personal_file(rag, owner: Optional[str], filename: str) -> bool:
     return False
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_personal_files.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/personal_files.py tests/test_career_personal_files.py
@@ -846,7 +846,7 @@ git commit -m "feat(career): owner-stamped personal file storage and indexing"
 **Interfaces:**
 - Produces: `create_library_document(db, *, owner: str | None, title: str, content: str, language: str | None = None, session_id: str | None = None, source: str = "user") -> Document` (adds + commits, fires `document_created`). Plan 01 uses it for cover letters.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_document_library_create.py
@@ -914,12 +914,12 @@ def test_post_document_route_uses_helper():
     assert "create_library_document(" in src
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_document_library_create.py -v`
 Expected: FAIL with `AttributeError: module 'routes.document_helpers' has no attribute 'create_library_document'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `routes/document_helpers.py`:
 
@@ -981,12 +981,12 @@ In `routes/document_routes.py`, replace lines 69-117 (from `doc_id = str(uuid.uu
             return _doc_to_dict(doc)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass and nothing regressed**
+- [x] **Step 4: Run tests to verify they pass and nothing regressed**
 
 Run: `python -m pytest tests/test_document_library_create.py tests/test_document_tool_owner_scope.py tests/test_document_deeplink.py -v`
 Expected: all passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add routes/document_helpers.py routes/document_routes.py tests/test_document_library_create.py
@@ -1004,7 +1004,7 @@ git commit -m "refactor(documents): factor create_library_document out of POST /
 **Interfaces:**
 - Produces: presets `github` (bearer) and `trello` (query `token` + `default_params.key`). Plan 03 calls `execute_api_call("github", ...)` / `execute_api_call("trello", ...)` once the user registers them in Settings → Integrations.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_integration_presets_career.py
@@ -1026,12 +1026,12 @@ def test_trello_preset_uses_query_token_and_default_key_param():
     assert "default_params" in p["description"] and "key" in p["description"]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_integration_presets_career.py -v`
 Expected: FAIL with `KeyError: 'github'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add before the closing `}` of `INTEGRATION_PRESETS` in `src/integrations.py`:
 
@@ -1066,12 +1066,12 @@ Add before the closing `}` of `INTEGRATION_PRESETS` in `src/integrations.py`:
 
 Check whether the presets dict already carries `base_url` on other entries; if the Settings UI reads `base_url` from a preset to pre-fill the form, nothing else is needed. If it does not, the user types the base URL when registering — the description tells them which.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_integration_presets_career.py -v`
 Expected: 2 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/integrations.py tests/test_integration_presets_career.py
@@ -1092,7 +1092,7 @@ git commit -m "feat(integrations): GitHub and Trello presets for career activity
 **Interfaces:**
 - Produces: `REVIEWER_DEPARTMENTS = ("career_recruiter", "career_hiring_manager", "career_engineer", "career_hr")`, `REVIEWER_NAMES: dict`, `load_persona(department) -> str`, `seed_reviewers(owner, session_factory=None) -> int`. Plan 02 reads reviewers as `CrewMember` rows whose `department` is in `REVIEWER_DEPARTMENTS`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_career_seeds.py
@@ -1246,12 +1246,12 @@ def test_council_member_edit_cannot_touch_a_career_reviewer(env):
     assert res.status_code == 404
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/test_career_seeds.py tests/test_council_excludes_career_reviewers.py -v`
 Expected: `test_career_seeds.py` fails with `ModuleNotFoundError: No module named 'services.career.seeds'`; the council exclusion tests fail with `assert 6 == 5` and `assert 200 == 404`.
 
-- [ ] **Step 3: Write the persona files**
+- [x] **Step 3: Write the persona files**
 
 `services/career/reviewers/recruiter.md`:
 
@@ -1277,7 +1277,7 @@ You are a blunt senior software engineer on the hiring panel. You ignore tone an
 You are the HR / People partner supporting this hire. You check the cover letter for consistency with the CV (dates, titles, employers, education), professionalism of tone, anything that would be flagged in an HR screen (over-sharing, negativity about past employers, unsupported salary or title demands, discriminatory or risky statements), and logistics the hiring team needs stated or omitted deliberately: location, right to work, notice period, availability. You also judge whether the letter reads as written by the candidate rather than generated. You are measured and specific, and you distinguish "must fix" from "nice to tidy".
 ```
 
-- [ ] **Step 4: Implement the seeder**
+- [x] **Step 4: Implement the seeder**
 
 ```python
 # services/career/seeds.py
@@ -1399,7 +1399,7 @@ def _retire_legacy_skills(skills_manager) -> None:
         logger.info("Retired legacy skill %s/%s v%s in favour of the career seed", category, name, version)
 ```
 
-- [ ] **Step 5: Exclude career reviewers from the council**
+- [x] **Step 5: Exclude career reviewers from the council**
 
 `services/council/personas.py` line 75 — change
 
@@ -1430,12 +1430,12 @@ to
                                             CrewMember.department.in_(DEPARTMENTS))
 ```
 
-- [ ] **Step 6: Run tests to verify they pass, including the existing council suites**
+- [x] **Step 6: Run tests to verify they pass, including the existing council suites**
 
 Run: `python -m pytest tests/test_career_seeds.py tests/test_council_excludes_career_reviewers.py tests/test_council_personas.py tests/test_council_routes_owner_scope.py -v`
 Expected: all passed
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add services/career/reviewers services/career/seeds.py services/council/personas.py routes/council_routes.py tests/test_career_seeds.py tests/test_council_excludes_career_reviewers.py
@@ -1452,7 +1452,7 @@ git commit -m "feat(career): seed reviewer personas; council ignores career_* de
 **Interfaces:**
 - Consumes: `seed_skills(owner, skills_manager, templates_dir=None)` from Task 7.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_skill_seeding.py
@@ -1536,12 +1536,12 @@ def test_retires_legacy_v1_but_keeps_other_versions(tmp_path):
     assert "linkedin-post-writer" not in seeded2   # name taken by the user's own edited skill
 ```
 
-- [ ] **Step 2: Run test to verify it passes (the seeder already exists from Task 7)**
+- [x] **Step 2: Run test to verify it passes (the seeder already exists from Task 7)**
 
 Run: `python -m pytest tests/test_career_skill_seeding.py -v`
 Expected: 2 passed. If `SkillsManager.load_all()` returns dicts without `name`, read `services/memory/skills.py:load_all` and adapt the `existing` set in `seed_skills` to the key it uses.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/test_career_skill_seeding.py services/career/seeds.py
@@ -1577,7 +1577,7 @@ Routes:
 
 `application_to_dict` adds `computed_status` = `"ghosted"` when status is in `("applied","acknowledged","screening")` and `last_event_at or applied_at or created_at` is older than `settings["ghosted_after_days"]`, else the stored status; and `days_since_event`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_routes_owner_scope.py
@@ -1719,12 +1719,12 @@ def test_settings_roundtrip(env):
     assert client.get("/api/career/settings").json()["voice_rules"] == "plain"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_routes_owner_scope.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'routes.career_routes'`
 
-- [ ] **Step 3: Implement the helpers**
+- [x] **Step 3: Implement the helpers**
 
 ```python
 # routes/career_helpers.py
@@ -1797,7 +1797,7 @@ def get_owned_application(db, aid: str, user: Optional[str]) -> JobApplication:
     return app
 ```
 
-- [ ] **Step 4: Implement the router**
+- [x] **Step 4: Implement the router**
 
 ```python
 # routes/career_routes.py
@@ -2009,12 +2009,12 @@ from routes.career_routes import setup_career_routes
 app.include_router(setup_career_routes(skills_manager, rag_manager))
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_routes_owner_scope.py -v`
 Expected: 7 passed. If pydantic in this repo is v1 (`field_validator` import fails), use `@validator("company", "role")` from `pydantic` with the same bodies.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add routes/career_routes.py routes/career_helpers.py app.py tests/test_career_routes_owner_scope.py
@@ -2042,7 +2042,7 @@ git commit -m "feat(career): bootstrap, settings and applications API"
 
 The example file is written as markdown: `# <title>\n\n## Job description\n\n<jd>\n\n## Cover letter\n\n<letter>\n` with filename `cover-letter-example-<slug>.md`; the CV is stored as `cv-<original name>`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_files_routes.py
@@ -2151,12 +2151,12 @@ def test_example_pair_requires_both_texts(env):
     assert client.post("/api/career/examples", json={"title": "x", "jd_text": "", "letter_text": "y"}).status_code == 422
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_files_routes.py -v`
 Expected: FAIL with 404s (routes do not exist yet)
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add to `routes/career_routes.py` imports:
 
@@ -2229,12 +2229,12 @@ Add these endpoints inside `setup_career_routes` before `return router`:
         return {"deleted": True}
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_files_routes.py tests/test_career_routes_owner_scope.py -v`
 Expected: all passed. `python-multipart` is already a dependency (email attachments use `UploadFile`); if the upload test errors with "Form data requires python-multipart", add it to `requirements.txt`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add routes/career_routes.py tests/test_career_files_routes.py
@@ -2256,7 +2256,7 @@ git commit -m "feat(career): CV upload and cover-letter example pairs"
 **Interfaces:**
 - Produces: `careerLogic.js` exports `TABS`, `STATUS_LABELS`, `statusChip(status)`, `daysLabel(days)`, `applicationBuckets(apps)`, `placeholderHtml(tab)`, `REVIEWER_COLORS`. `career.js` exports `open`, `close`, `isOpen`, `refresh`, `render`, `getState`, a registry `registerTab(name, renderFn)` later plans use to plug in Tracker/Reviewers/Posts renderers (each renderer is `(state) => html` where `state = {tab, apps, settings, bootstrap, examples, view, openId}`), and `onPanelClick(handler)` where `handler(ev, state)` returns `true` when it handled the click. The default export is a `careerApi` object with all of those. **Plugin contract for plans 01–04:** each feature module exports `install(api)` and never imports `career.js`; `career.js` gets two lines per plugin at the marked plugin block (`import { install as installX } from './careerX.js';` and `installX(careerApi);`). Detail-view sections are added by pushing `(app, state) => html` onto `detailSections` exported from `careerApplications.js`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_career_ui_wiring.py
@@ -2370,12 +2370,12 @@ def test_career_module_sources_parse(node_available):
         assert res.returncode == 0, res.stderr
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/test_career_ui_wiring.py tests/test_career_js.py -v`
 Expected: wiring tests fail on the first assertion; JS tests fail with `Cannot find module`.
 
-- [ ] **Step 3: Server deep link (`app.py`)**
+- [x] **Step 3: Server deep link (`app.py`)**
 
 After `serve_council`:
 
@@ -2385,7 +2385,7 @@ async def serve_career(request: Request):
     return await serve_index(request)
 ```
 
-- [ ] **Step 4: `static/index.html`**
+- [x] **Step 4: `static/index.html`**
 
 In the inline favicon script, add to `SHAPES` after the `'/council'` entry:
 
@@ -2438,7 +2438,7 @@ After the `#tool-council-btn` list item:
         </div>
 ```
 
-- [ ] **Step 5: `static/app.js`**
+- [x] **Step 5: `static/app.js`**
 
 Import after the council import:
 
@@ -2468,7 +2468,7 @@ Click handler after the council block:
     '/career': () => document.getElementById('tool-career-btn')?.click(),
 ```
 
-- [ ] **Step 6: `static/js/careerLogic.js`**
+- [x] **Step 6: `static/js/careerLogic.js`**
 
 ```javascript
 // ============================================
@@ -2537,7 +2537,7 @@ export const placeholderHtml = (tab) =>
   `<div class="career-placeholder memory-desc">${PLACEHOLDER_COPY[tab] || `${tab} is not built yet.`}</div>`;
 ```
 
-- [ ] **Step 7: `static/js/careerApplications.js`**
+- [x] **Step 7: `static/js/careerApplications.js`**
 
 ```javascript
 // ============================================
@@ -2624,7 +2624,7 @@ export const detailHtml = (app, state) => `
   </div>`;
 ```
 
-- [ ] **Step 8: `static/js/careerSetup.js`**
+- [x] **Step 8: `static/js/careerSetup.js`**
 
 ```javascript
 // ============================================
@@ -2690,7 +2690,7 @@ export const readSettingsForm = () => ({
 });
 ```
 
-- [ ] **Step 9: `static/js/career.js`**
+- [x] **Step 9: `static/js/career.js`**
 
 ```javascript
 // ============================================
@@ -2926,7 +2926,7 @@ export default careerApi;
 
 Check `uiModule.styledConfirm` exists in `static/js/ui.js` (it is referenced by `tests/test_dialog_aria.py`); if its name differs, use the exported confirm helper from that file.
 
-- [ ] **Step 10: `static/style.css`**
+- [x] **Step 10: `static/style.css`**
 
 Append at the end of the council section (after `.score-ai-tag`):
 
@@ -2948,12 +2948,12 @@ Append at the end of the council section (after `.score-ai-tag`):
 .career-tile-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.06em; }
 ```
 
-- [ ] **Step 11: Run the tests**
+- [x] **Step 11: Run the tests**
 
 Run: `python -m pytest tests/test_career_ui_wiring.py tests/test_career_js.py tests/test_dialog_aria.py -v`
 Expected: all passed
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add app.py static/index.html static/app.js static/style.css static/js/career.js static/js/careerLogic.js static/js/careerApplications.js static/js/careerSetup.js tests/test_career_ui_wiring.py tests/test_career_js.py
@@ -2964,7 +2964,7 @@ git commit -m "feat(career): Career hub modal with Applications and Setup tabs"
 
 ### Task 12: Full verification and smoke test
 
-- [ ] **Step 1: Syntax and suites**
+- [x] **Step 1: Syntax and suites**
 
 ```bash
 python -m py_compile app.py routes/*.py src/*.py services/career/*.py core/database.py
@@ -2974,7 +2974,7 @@ python -m pytest
 ```
 Expected: every suite green; the full run shows no new failures compared with `git stash && python -m pytest && git stash pop` on the pre-plan tree.
 
-- [ ] **Step 2: Manual smoke (server running)**
+- [x] **Step 2: Manual smoke (server running)**
 
 1. Open `http://127.0.0.1:7000/career` — the Career modal opens on the Applications tab with "No applications yet".
 2. Setup tab → upload a `.docx` CV → toast reports chunk count; the tab shows the `cv-…` filename.
@@ -2984,7 +2984,7 @@ Expected: every suite green; the full run shows no new failures compared with `g
 6. Open `/council` → Members shows five council members only; the four reviewers are absent.
 7. `GET /api/career/bootstrap` (browser) → `reviewers` lists four `career_*` entries.
 
-- [ ] **Step 3: Final commit (if anything was touched during smoke)**
+- [x] **Step 3: Final commit (if anything was touched during smoke)**
 
 ```bash
 git add -A
@@ -2995,10 +2995,10 @@ git commit -m "chore(career): foundation smoke fixes"
 
 ## Done when
 
-- [ ] `tests/test_career_*.py`, council, document and personal-upload suites pass; full `python -m pytest` has no new failures.
-- [ ] `/career` deep link opens the hub; Applications and Setup tabs work end to end; Tracker/Reviewers/Posts show their placeholders.
-- [ ] Reviewers exist as `career_*` crew members and never appear in the council office.
-- [ ] A `.docx` CV uploads with real text; `GET /api/career/bootstrap` reports `has_cv: true`.
-- [ ] `create_library_document` is the only place a session-less document is created.
-- [ ] `services/career/llm.py` exposes `complete`, `complete_utility` and `render_template`; later plans import them rather than redefining.
-- [ ] GitHub and Trello presets appear in the Integrations preset list.
+- [x] `tests/test_career_*.py`, council, document and personal-upload suites pass; full `python -m pytest` has no new failures.
+- [x] `/career` deep link opens the hub; Applications and Setup tabs work end to end; Tracker/Reviewers/Posts show their placeholders.
+- [x] Reviewers exist as `career_*` crew members and never appear in the council office.
+- [x] A `.docx` CV uploads with real text; `GET /api/career/bootstrap` reports `has_cv: true`.
+- [x] `create_library_document` is the only place a session-less document is created.
+- [x] `services/career/llm.py` exposes `complete`, `complete_utility` and `render_template`; later plans import them rather than redefining.
+- [x] GitHub and Trello presets appear in the Integrations preset list.
