@@ -1421,6 +1421,97 @@ class Report(TimestampMixin, Base):
     finished_at = Column(DateTime, nullable=True)
 
 
+class JobApplication(TimestampMixin, Base):
+    """A job application tracked by the Career hub (docs/plans/career-hub-design.md).
+
+    One row is the spine for a cover letter document (plan 01), a reviewer
+    panel verdict (plan 02) and the email events the tracker attaches (plan 04).
+    """
+    __tablename__ = "job_applications"
+
+    id      = Column(String, primary_key=True, index=True)
+    owner   = Column(String, nullable=True, index=True)
+    company = Column(String, nullable=False)
+    role    = Column(String, nullable=False)
+    source  = Column(String, default="manual")     # manual | email | linkedin | board
+    url     = Column(String, nullable=True)
+    jd_text = Column(Text, nullable=True)
+
+    applied_at    = Column(DateTime, nullable=True)
+    status        = Column(String, default="drafting")
+    last_event_at = Column(DateTime, nullable=True)
+    notes         = Column(Text, nullable=True)
+
+    cover_letter_doc_id = Column(String, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    latest_review_id    = Column(String, nullable=True)
+    archived            = Column(Boolean, default=False)
+
+
+class JobApplicationEvent(TimestampMixin, Base):
+    """An email (or manual note) attached to an application by the tracker.
+
+    ``application_id`` is nullable: low-confidence classifications land as
+    "unsorted" events the user assigns or dismisses from the dashboard.
+    """
+    __tablename__ = "job_application_events"
+
+    id             = Column(String, primary_key=True, index=True)
+    owner          = Column(String, nullable=True, index=True)
+    application_id = Column(String, ForeignKey("job_applications.id", ondelete="CASCADE"),
+                            nullable=True, index=True)
+
+    kind      = Column(String, default="other")     # confirmation | rejection | interview_invite | offer | info_request | recruiter_outreach | other
+    sentiment = Column(String, default="neutral")   # positive | negative | neutral
+
+    message_id   = Column(String, nullable=True, index=True)
+    uid          = Column(String, nullable=True)
+    folder       = Column(String, nullable=True)
+    account_id   = Column(String, nullable=True)
+    from_address = Column(String, nullable=True)
+    reply_to     = Column(String, nullable=True)
+    subject      = Column(String, nullable=True)
+    received_at  = Column(DateTime, nullable=True)
+    summary      = Column(Text, nullable=True)
+
+    can_reply            = Column(Boolean, default=False)
+    reply_blocked_reason = Column(String, nullable=True)
+    suggested_reply      = Column(Text, nullable=True)
+    confidence           = Column(Integer, default=0)   # 0-100
+
+
+class ApplicationReview(TimestampMixin, Base):
+    """One reviewer-panel run over an application's cover letter (plan 02)."""
+    __tablename__ = "application_reviews"
+
+    id             = Column(String, primary_key=True, index=True)
+    owner          = Column(String, nullable=True, index=True)
+    application_id = Column(String, ForeignKey("job_applications.id", ondelete="CASCADE"),
+                            nullable=False, index=True)
+
+    status        = Column(String, default="running")   # running | done | error
+    verdicts      = Column(Text, nullable=True)         # JSON: {dept: {verdict, top_issues, line_edits, scores}}
+    panel_summary = Column(Text, nullable=True)         # markdown synthesis
+    scores        = Column(Text, nullable=True)         # JSON aggregate
+    error         = Column(Text, nullable=True)
+    started_at    = Column(DateTime, nullable=True)
+    finished_at   = Column(DateTime, nullable=True)
+
+
+class CareerPost(TimestampMixin, Base):
+    """A LinkedIn post draft generated from project activity (plan 03)."""
+    __tablename__ = "career_posts"
+
+    id          = Column(String, primary_key=True, index=True)
+    owner       = Column(String, nullable=True, index=True)
+    post_type   = Column(String, default="progress")   # progress | technique | lesson | narrative
+    body        = Column(Text, nullable=True)
+    hooks       = Column(Text, nullable=True)          # JSON list of alternative opening lines
+    sources     = Column(Text, nullable=True)          # JSON list of activity item refs
+    window_days = Column(Integer, default=14)
+    status      = Column(String, default="draft")      # draft | posted | discarded
+    posted_at   = Column(DateTime, nullable=True)
+
+
 class CalendarCal(TimestampMixin, Base):
     """A calendar (e.g. 'Personal', 'TimeTree')."""
     __tablename__ = "calendars"
