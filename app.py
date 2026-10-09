@@ -697,6 +697,8 @@ from routes.career_routes import setup_career_routes
 app.include_router(setup_career_routes(skills_manager, rag_manager))
 from routes.career_studio_routes import setup_career_studio_routes
 app.include_router(setup_career_studio_routes(rag_manager))
+from routes.career_tracker_routes import setup_career_tracker_routes
+app.include_router(setup_career_tracker_routes())
 
 # Email
 from routes.email_routes import setup_email_routes

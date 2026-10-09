@@ -12,6 +12,7 @@ import { installCoverLetter } from './careerCoverLetter.js';
 import { installReviewers } from './careerReviewers.js';
 import { installReview } from './careerReview.js';
 import { installPosts } from './careerPosts.js';
+import { installTracker } from './careerTracker.js';
 
 const _tabRenderers = {};
 const _clickHandlers = [];
@@ -240,5 +241,6 @@ installCoverLetter(careerApi);
 installReviewers(careerApi);
 installReview(careerApi);
 installPosts(careerApi);
+installTracker(careerApi);
 
 export default careerApi;

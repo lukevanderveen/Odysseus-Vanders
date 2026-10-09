@@ -35113,6 +35113,9 @@ body.theme-frosted .modal {
 .career-tile { padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
 .career-tile-num { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .career-tile-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.06em; }
+.career-event .proj-card-head { gap: 8px; flex-wrap: wrap; }
+.career-reply { white-space: pre-wrap; font-size: 12px; padding: 8px; margin: 0; border-left: 3px solid color-mix(in srgb, var(--fg) 30%, transparent); opacity: 0.9; }
+.career-app .proj-card-head { gap: 8px; }
 /* Cover letter section (plan 01) */
 .career-letter { display: flex; flex-direction: column; gap: 6px; }
 .career-claim-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }

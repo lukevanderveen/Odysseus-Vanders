@@ -33,7 +33,7 @@
 **Interfaces:**
 - Produces: `routes.email_routes._NEW_MAIL_SUBSCRIBERS: list`, `register_new_mail_subscriber(fn)` where `fn` is `async (owner: str, account_id: str | None, fresh: list[dict]) -> None` and `fresh` contains only the list dicts whose key (`message_id` or `uid`) was not seen before.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_email_new_mail_subscribers.py
@@ -109,12 +109,12 @@ def test_subscriber_exception_does_not_propagate(env):
     assert calls == [("vanders", "acc1", ["<b@x>"])]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_email_new_mail_subscribers.py -v`
 Expected: FAIL with `AttributeError: module 'routes.email_routes' has no attribute 'register_new_mail_subscriber'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `routes/email_routes.py`, insert directly above `def _record_email_received_events(...)` (line 93):
 
@@ -221,12 +221,12 @@ def _record_email_received_events(owner: str, account_id: str | None, folder: st
 
 Note for the test's `fire_event` monkeypatch: the function imports `fire_event` locally, so the patch with `raising=False` is a no-op and the real `fire_event` runs; it is safe without a scheduler (it only queries `ScheduledTask` rows and swallows errors). If the real import fails in the test environment, add `monkeypatch.setitem(sys.modules, "src.event_bus", types.SimpleNamespace(fire_event=lambda *a, **k: None))` to the fixture.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_email_new_mail_subscribers.py tests/test_security_regressions.py -v -k "subscriber or email"`
 Expected: the four new tests pass; existing email security tests unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add routes/email_routes.py tests/test_email_new_mail_subscribers.py
@@ -250,7 +250,7 @@ No work in this plan. `services/career/llm.py` ships in `career-00-hub-foundatio
 **Interfaces:**
 - Produces: `PREFILTER_SUBJECT_RE`, `PREFILTER_SENDER_RE`, `ATS_SENDER_RE`, `prefilter(list_dict, extra_terms=()) -> bool`, `is_ats_sender(from_address) -> bool`, `KINDS`, `SENTIMENTS`, `CLASSIFY_PROMPT`, `parse_verdict(text) -> dict`, `async classify(headers: dict, body: str, complete, owner) -> dict` where the verdict dict is `{is_job_related: bool, kind: str, sentiment: str, company: str, role: str, confidence: int (0-100), summary: str, next_step: str}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_email_classifier.py
@@ -318,12 +318,12 @@ async def test_classify_builds_prompt_and_parses():
     assert seen["messages"][0]["role"] == "system"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_email_classifier.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.email_classifier'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/email_classifier.py
@@ -430,12 +430,12 @@ async def classify(headers: Dict[str, str], body: str, complete: Callable, owner
     return parse_verdict(raw or "")
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_email_classifier.py -v`
 Expected: 12 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/email_classifier.py tests/test_career_email_classifier.py
@@ -453,7 +453,7 @@ git commit -m "feat(career): job-email prefilter and JSON classifier"
 **Interfaces:**
 - Produces: `NO_REPLY_LOCALS`, `reply_address(headers: dict, body: str = "") -> tuple[str | None, str | None]`, `should_suggest_reply(kind, sentiment, can_reply) -> bool`, `REPLY_PROMPT`, `async suggest_reply(ctx: dict, settings: dict, complete, owner) -> str` (ctx keys: `kind, company, role, subject, summary, next_step, body`; kind `"nudge"` produces a polite follow-up), `write_cached_reply(message_id, reply, model="", uid="", folder="INBOX") -> bool` (True when a row was inserted).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_tracker_replies.py
@@ -527,12 +527,12 @@ def test_write_cached_reply_inserts_once(tmp_path, monkeypatch):
     assert row == ("first draft", "7", "INBOX")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_tracker_replies.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.tracker_replies'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/tracker_replies.py
@@ -634,12 +634,12 @@ def write_cached_reply(message_id: str, reply: str, model: str = "", uid: str = 
         conn.close()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_tracker_replies.py -v`
 Expected: 17 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/tracker_replies.py tests/test_career_tracker_replies.py
@@ -659,7 +659,7 @@ git commit -m "feat(career): reply address resolution and reply drafts for track
 - Produces: `normalise_company(name) -> str`, `STATUS_FOR_KIND`, `CREATE_KINDS`, `match_application(db, owner, company, role, message_refs) -> JobApplication | None`, `record_event(db, owner, app, verdict, headers, *, uid, folder, account_id, can_reply, reply_blocked_reason) -> JobApplicationEvent | None` (None when message_id already recorded), `async fetch_full(owner, account_id, uid, folder="INBOX") -> dict`, `async process_message(owner, account_id, list_dict, *, complete=None, complete_utility=None, session_factory=None, fetch=None, settings=None, notify=None) -> dict | None`, `async on_new_inbox_messages(owner, account_id, fresh)`, `register()`.
 - The `fetch_full` result shape: `{"headers": {"subject", "from", "from_address", "reply_to", "date", "message_id", "in_reply_to", "references", "list_unsubscribe", "x_odysseus_origin"}, "body": str}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_tracker.py
@@ -873,12 +873,12 @@ async def test_on_new_inbox_messages_isolates_failures(db_factory, monkeypatch):
     assert seen == ["1", "2"]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_tracker.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.tracker'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/tracker.py
@@ -1108,12 +1108,12 @@ def register() -> None:
     register_new_mail_subscriber(on_new_inbox_messages)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_tracker.py -v`
 Expected: 15 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/tracker.py tests/test_career_tracker.py
@@ -1132,7 +1132,7 @@ git commit -m "feat(career): tracker pipeline — match, record, reply draft, no
 **Interfaces:**
 - Produces: `owner_accounts(owner) -> list[dict]` (each `{"id", "name"}`), `list_dicts_since(conn, since: datetime, limit=300) -> list[dict]` (sync, given an open IMAP connection), `async scan_backfill(owner, days, *, session_factory=None, complete=None, complete_utility=None, settings=None, imap=None, process=None) -> dict` returning `{"scanned", "candidates", "events", "accounts"}`, and the built-in action `action_scan_job_emails(owner, **kw) -> (str, bool)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_tracker_scan.py
@@ -1232,12 +1232,12 @@ def test_action_is_registered_and_shipped_paused():
     assert "scan_job_emails" in TaskScheduler._MODEL_BACKED_ACTIONS
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_tracker_scan.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.tracker_scan'`
 
-- [ ] **Step 3: Implement the scanner**
+- [x] **Step 3: Implement the scanner**
 
 ```python
 # services/career/tracker_scan.py
@@ -1367,7 +1367,7 @@ async def action_scan_job_emails(owner: str, **kwargs):
 
 Note: `list_dicts_since` calls `conn.uid("SEARCH", None, ...)`, so the fake in the test receives `(None, '(SINCE "06-Sep-2026")')` — the assertion checks `args[1]`.
 
-- [ ] **Step 4: Register the action and seed**
+- [x] **Step 4: Register the action and seed**
 
 `src/builtin_actions.py` — add inside `BUILTIN_ACTIONS` after `"check_email_urgency": action_check_email_urgency,`:
 
@@ -1397,12 +1397,12 @@ Add to `BUILTIN_ACTION_INFO`:
 
 Add `"scan_job_emails",` to both `_SILENT_ACTIONS` and `_MODEL_BACKED_ACTIONS`.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `python -m pytest tests/test_career_tracker_scan.py tests/test_scheduler_restart_doublefire.py -v`
 Expected: all passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add services/career/tracker_scan.py src/builtin_actions.py src/task_scheduler.py tests/test_career_tracker_scan.py
@@ -1435,7 +1435,7 @@ git commit -m "feat(career): backfill scan and paused scan_job_emails action"
 
 Tiles: `active` = apps whose computed status ∈ {applied, acknowledged, screening, interview, offer}; `awaiting` = ∈ {applied, acknowledged, screening}; `interviews`/`offers`/`rejected` = counts of those computed statuses; `response_rate` = round(100 × apps with ≥1 event / apps with status ≠ drafting) or 0. `nudge_due` = awaiting and `days_since_event >= nudge_after_days`. `updated_at` = max of event `created_at` and application `updated_at`, ISO string or `""`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_tracker_routes.py
@@ -1567,12 +1567,12 @@ def test_nudge_returns_draft(env, monkeypatch):
     assert client.post("/api/career/tracker/applications/x/nudge").status_code == 404
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_tracker_routes.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'routes.career_tracker_routes'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # routes/career_tracker_routes.py
@@ -1786,12 +1786,12 @@ from routes.career_tracker_routes import setup_career_tracker_routes
 app.include_router(setup_career_tracker_routes())
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_tracker_routes.py -v`
 Expected: 5 passed. If `routes/career_helpers.py` from plan 00 does not export `days_since_event`, it does define it at module level (used by `application_to_dict`); import it as shown.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add routes/career_tracker_routes.py app.py tests/test_career_tracker_routes.py
@@ -1812,7 +1812,7 @@ git commit -m "feat(career): tracker summary, triage, scan and nudge API"
 - Consumes: the plan 00 `career.js` plugin API object (`registerTab`, `onPanelClick`, `refresh`, `render`, `getState`, `isOpen`, `close`) passed to `installTracker(api)`; `careerApplications.detailSections`; `careerLogic.statusChip/daysLabel`; `uiModule.esc/showToast/showError/copyToClipboard`.
 - Produces: `careerTrackerLogic.js` exports `tilesHtml(tiles, esc)`, `sentimentChip(kind, sentiment)`, `eventRowHtml(ev, esc, {showApp})`, `nudgeDue(app, settings, now)`, `summaryChanged(prev, next)`; `careerTracker.js` exports `installTracker(api)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_tracker_js.py
@@ -1901,12 +1901,12 @@ def test_tracker_wired_into_hub():
         assert res.returncode == 0, res.stderr
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_tracker_js.py -v`
 Expected: FAIL with `Cannot find module` / assertion on missing import.
 
-- [ ] **Step 3: `static/js/careerTrackerLogic.js`**
+- [x] **Step 3: `static/js/careerTrackerLogic.js`**
 
 ```javascript
 // ============================================
@@ -1974,7 +1974,7 @@ export const nudgeDue = (app, settings, now) => {
 export const summaryChanged = (prev, next) => (prev || {}).updated_at !== (next || {}).updated_at;
 ```
 
-- [ ] **Step 4: `static/js/careerTracker.js`**
+- [x] **Step 4: `static/js/careerTracker.js`**
 
 ```javascript
 // ============================================
@@ -2161,7 +2161,7 @@ installTracker(careerApi);
 
 `careerTracker.js` never imports `career.js`, so there is no module cycle.
 
-- [ ] **Step 5: `static/style.css`**
+- [x] **Step 5: `static/style.css`**
 
 Append after the `.career-tile-label` rule from plan 00:
 
@@ -2171,12 +2171,12 @@ Append after the `.career-tile-label` rule from plan 00:
 .career-app .proj-card-head { gap: 8px; }
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `python -m pytest tests/test_career_tracker_js.py tests/test_career_js.py tests/test_career_ui_wiring.py -v`
 Expected: all passed
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add static/js/careerTracker.js static/js/careerTrackerLogic.js static/js/career.js static/style.css tests/test_career_tracker_js.py
@@ -2187,7 +2187,7 @@ git commit -m "feat(career): live Tracker tab with tiles, responses, awaiting an
 
 ### Task 9: Full verification and smoke test
 
-- [ ] **Step 1: Syntax and suites**
+- [x] **Step 1: Syntax and suites**
 
 ```bash
 python -m py_compile app.py routes/*.py src/*.py services/career/*.py
@@ -2219,10 +2219,10 @@ git commit -m "chore(career): tracker smoke fixes"
 
 ## Done when
 
-- [ ] `tests/test_email_new_mail_subscribers.py` and all `tests/test_career_*.py` pass; the full `python -m pytest` has no new failures.
+- [x] `tests/test_email_new_mail_subscribers.py` and all `tests/test_career_*.py` pass; the full `python -m pytest` has no new failures.
 - [ ] A confirmation email creates an application and an event within one inbox poll while the app is open; an interview invite flips status, drafts a reply, and triggers a notification.
 - [ ] The reply draft is visible both in the Tracker row and in the email reader's cached AI reply.
-- [ ] No-reply / bulk senders never get a draft and the row explains why.
-- [ ] Low-confidence classifications land in Unsorted and can be assigned or dismissed.
-- [ ] `POST /api/career/tracker/scan` imports history; the `scan_job_emails` housekeeping task exists and ships paused.
-- [ ] The inbox list route is unchanged in latency: subscriber work runs in background tasks and the first list after startup only baselines.
+- [x] No-reply / bulk senders never get a draft and the row explains why.
+- [x] Low-confidence classifications land in Unsorted and can be assigned or dismissed.
+- [x] `POST /api/career/tracker/scan` imports history; the `scan_job_emails` housekeeping task exists and ships paused.
+- [x] The inbox list route is unchanged in latency: subscriber work runs in background tasks and the first list after startup only baselines.
