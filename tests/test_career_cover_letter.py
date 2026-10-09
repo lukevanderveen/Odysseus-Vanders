@@ -1,10 +1,20 @@
 """Cover-letter service: requirement extraction, drafting, claims split, rubric (plan 01)."""
 import json
+import sys
 from types import SimpleNamespace
 
 import pytest
 
-from services.career import cover_letter as cl
+# Other test modules stub src.endpoint_resolver at collection time; evict
+# file-less stubs so services.career.llm (imported by cover_letter) loads.
+for _name in ("src.endpoint_resolver", "src.llm_core"):
+    _mod = sys.modules.get(_name)
+    if _mod is not None and not getattr(_mod, "__file__", None):
+        sys.modules.pop(_name, None)
+        sys.modules.pop("services.career.llm", None)
+        sys.modules.pop("services.career.cover_letter", None)
+
+from services.career import cover_letter as cl  # noqa: E402
 
 
 def _app(**over):

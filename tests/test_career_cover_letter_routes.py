@@ -35,6 +35,14 @@ if _atomic is not None and not getattr(_atomic, "__file__", None):
     sys.modules.pop("core.atomic_io", None)
     sys.modules.pop("services.career.settings", None)
     sys.modules.pop("services.career.claims_store", None)
+for _name in ("src.endpoint_resolver", "src.llm_core"):
+    # Collection-time stubs lack resolve_utility_fallback_candidates; evict them
+    # so services.career.llm binds the real resolver.
+    _mod = sys.modules.get(_name)
+    if _mod is not None and not getattr(_mod, "__file__", None):
+        sys.modules.pop(_name, None)
+        sys.modules.pop("services.career.llm", None)
+        sys.modules.pop("services.career.cover_letter", None)
 
 _sa, _sa_orm, _sa_pool, _coredb, sr, cs, claims_store = _import_real(
     "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.pool", "core.database",
