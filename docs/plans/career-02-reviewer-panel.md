@@ -44,7 +44,7 @@ From plan 01:
 **Interfaces:**
 - Produces: `REVIEW_DIMS`, `DIM_LABELS`, `VERDICTS = ("advance", "maybe", "reject")`, `PANEL_VERDICTS = ("advance", "revise", "rewrite")`, `dims_json_example(department) -> str`, `parse_review_block(text, department) -> dict`, `parse_panel_verdict(text) -> str`, `strip_json_fence(text) -> str`, `aggregate_panel(verdicts) -> dict`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_review_scoring.py
@@ -104,12 +104,12 @@ def test_aggregate_panel_averages_per_reviewer_then_overall():
     assert rs.aggregate_panel({}) == {"overall": None, "by_reviewer": {}, "verdict_counts": {}}
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_review_scoring.py -v`
 Expected: FAIL with `ImportError: cannot import name 'review_scoring' from 'services.career'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/review_scoring.py
@@ -209,12 +209,12 @@ def aggregate_panel(verdicts: dict) -> dict:
     return {"overall": overall, "by_reviewer": by_reviewer, "verdict_counts": counts}
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_review_scoring.py -v`
 Expected: 7 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/review_scoring.py tests/test_career_review_scoring.py
@@ -234,7 +234,7 @@ git commit -m "feat(career): reviewer panel score parsing and aggregation"
 - Consumes: `services.career.llm.render_template` (plan 00).
 - Produces: `load_template(subdir: str, name: str) -> str` (checks `data/career/<subdir>/<name>.md`, then `services/career/<subdir>/<name>.md`; raises `FileNotFoundError`) and re-exports `render_template` so callers import both from one place.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_templates.py
@@ -272,12 +272,12 @@ def test_render_template_replaces_only_known_keys():
     assert out == "A Acme {\"json\": 1} {unknown}"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_templates.py -v`
 Expected: FAIL with `ImportError: cannot import name 'templates' from 'services.career'`
 
-- [ ] **Step 3: Implement the module**
+- [x] **Step 3: Implement the module**
 
 ```python
 # services/career/templates.py
@@ -310,7 +310,7 @@ def load_template(subdir: str, name: str) -> str:
     raise FileNotFoundError(f"No template {subdir}/{name}.md")
 ```
 
-- [ ] **Step 4: Write the templates**
+- [x] **Step 4: Write the templates**
 
 `services/career/reviewers/prompts/reviewer.md`:
 
@@ -375,12 +375,12 @@ Then output exactly one fenced json block and nothing after it, where panel_verd
 {reviews_markdown}
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_templates.py -v`
 Expected: 4 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add services/career/templates.py services/career/reviewers/prompts tests/test_career_templates.py
@@ -400,7 +400,7 @@ git commit -m "feat(career): reviewer and panel prompt templates with override d
 - Consumes: Task 1 and Task 2; plan 00 `services.career.llm.complete`; plan 01 `services.career.evidence.cv_chunks`; plan 00 models and `seed_reviewers`.
 - Produces: `review_runner.run_review(review_id, complete=None, session_factory=None, evidence=None, notify=None) -> dict` (`{"status": "done"|"error", "review_id": ..., "error"?: ...}`), `review_runner.queue_state() -> {"running": id|None, "queued": [ids]}`, `review_prompts.ReviewContext`, `review_prompts.build_reviewer_messages(member, ctx)`, `review_prompts.build_panel_messages(ctx, verdicts)`, `review_prompts.member_candidate(member, owner, session_factory)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_review_runner.py
@@ -580,12 +580,12 @@ def test_member_candidate_uses_override_model(db_factory, monkeypatch):
     assert prompts.member_candidate({"model": "", "endpoint_url": ""}, "vanders", db_factory) is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_review_runner.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.review_runner'`
 
-- [ ] **Step 3: Implement `review_prompts.py`**
+- [x] **Step 3: Implement `review_prompts.py`**
 
 ```python
 # services/career/review_prompts.py
@@ -712,7 +712,7 @@ def member_candidate(member: Dict, owner: Optional[str],
     return (build_chat_url(base), model, build_headers(api_key, base))
 ```
 
-- [ ] **Step 4: Implement `review_runner.py`**
+- [x] **Step 4: Implement `review_runner.py`**
 
 ```python
 # services/career/review_runner.py
@@ -898,12 +898,12 @@ async def run_review(review_id: str, complete: Optional[Callable] = None, sessio
     return {"status": "done", "review_id": review_id}
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_review_runner.py -v`
 Expected: 5 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add services/career/review_prompts.py services/career/review_runner.py tests/test_career_review_runner.py
@@ -931,7 +931,7 @@ git commit -m "feat(career): reviewer panel runner with queue, persistence and n
 | GET | `/reviewers/status` | — | `{reviewers: [{id, department, name, status: Busy\|Ready}], running: id\|null, queued: [ids]}` |
 | PUT | `/reviewers/{mid}` | `{name?, avatar?, personality?, model?, endpoint_url?}` | reviewer dict; 404 for council members or foreign rows |
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_review_routes.py
@@ -1078,12 +1078,12 @@ def test_reviewers_status_reflects_queue(env):
     assert all(r["status"] == "Ready" for r in status["reviewers"])
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_review_routes.py -v`
 Expected: FAIL with `AttributeError: module 'routes.career_studio_routes' has no attribute 'run_review'`
 
-- [ ] **Step 3: Add imports and helpers to `routes/career_studio_routes.py`**
+- [x] **Step 3: Add imports and helpers to `routes/career_studio_routes.py`**
 
 Add to the import block at the top of the file (keep whatever plan 01 already imports; add only the missing names):
 
@@ -1148,7 +1148,7 @@ def _reviewer_query(db, user: Optional[str]):
     return q
 ```
 
-- [ ] **Step 4: Add the endpoints**
+- [x] **Step 4: Add the endpoints**
 
 Insert inside `setup_career_studio_routes(...)` immediately before `return router`:
 
@@ -1252,12 +1252,12 @@ Insert inside `setup_career_studio_routes(...)` immediately before `return route
             db.close()
 ```
 
-- [ ] **Step 5: Run tests to verify they pass, plus plan 01's studio route tests**
+- [x] **Step 5: Run tests to verify they pass, plus plan 01's studio route tests**
 
 Run: `python -m pytest tests/test_career_review_routes.py tests/test_career_cover_letter_routes.py -v`
 Expected: all passed (if plan 01 named its route test file differently, run `python -m pytest tests/test_career_*.py`).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add routes/career_studio_routes.py tests/test_career_review_routes.py
@@ -1280,7 +1280,7 @@ git commit -m "feat(career): review and reviewer endpoints"
 - Consumes: plan 00 `career.js` API object, `careerApplications.detailSections`, `careerLogic.REVIEWER_COLORS`; `councilLogic.memberStatusChip`, `modelSort.sortModelIds`; `uiModule.esc/showToast/showError`.
 - Produces: `careerReviewLogic.js` exports `REVIEW_DIMS`, `DIM_LABELS`, `reviewScoreEntries(verdict)`, `reviewScoreBarsHtml(verdict, esc)`, `panelVerdictChip(verdict)`, `reviewerLabel(department)`. `careerReviewers.js` exports `installReviewers(api)`. `careerReview.js` exports `installReview(api)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_review_js.py
@@ -1352,12 +1352,12 @@ def test_modules_parse_and_career_js_installs_them(node_available):
     assert "installReviewers(careerApi);" in src and "installReview(careerApi);" in src
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_review_js.py -v`
 Expected: FAIL with `Cannot find module` for `careerReviewLogic.js`
 
-- [ ] **Step 3: `static/js/careerReviewLogic.js`**
+- [x] **Step 3: `static/js/careerReviewLogic.js`**
 
 ```javascript
 // ============================================
@@ -1426,7 +1426,7 @@ const VERDICT_CHIPS = {
 export const panelVerdictChip = (verdict) => VERDICT_CHIPS[verdict] || { label: 'Pending', cls: 'career-chip-muted' };
 ```
 
-- [ ] **Step 4: `static/js/careerReviewers.js`**
+- [x] **Step 4: `static/js/careerReviewers.js`**
 
 ```javascript
 // ============================================
@@ -1586,7 +1586,7 @@ export const installReviewers = (api) => {
 };
 ```
 
-- [ ] **Step 5: `static/js/careerReview.js`**
+- [x] **Step 5: `static/js/careerReview.js`**
 
 ```javascript
 // ============================================
@@ -1712,7 +1712,7 @@ export const installReview = (api) => {
 };
 ```
 
-- [ ] **Step 6: Wire into `static/js/career.js`**
+- [x] **Step 6: Wire into `static/js/career.js`**
 
 Add after the existing imports:
 
@@ -1728,7 +1728,7 @@ installReviewers(careerApi);
 installReview(careerApi);
 ```
 
-- [ ] **Step 7: `static/style.css`**
+- [x] **Step 7: `static/style.css`**
 
 Append to the `/* ── Career hub ── */` section:
 
@@ -1738,12 +1738,12 @@ Append to the `/* ── Career hub ── */` section:
 .career-detail .proj-summary-body { max-height: 260px; }
 ```
 
-- [ ] **Step 8: Run tests**
+- [x] **Step 8: Run tests**
 
 Run: `python -m pytest tests/test_career_review_js.py tests/test_career_js.py -v`
 Expected: all passed
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add static/js/careerReviewLogic.js static/js/careerReviewers.js static/js/careerReview.js static/js/career.js static/style.css tests/test_career_review_js.py
@@ -1754,7 +1754,7 @@ git commit -m "feat(career): Reviewers tab and panel review section"
 
 ### Task 6: Full verification and smoke test
 
-- [ ] **Step 1: Syntax and suites**
+- [x] **Step 1: Syntax and suites**
 
 ```bash
 python -m py_compile routes/career_studio_routes.py services/career/*.py
@@ -1764,7 +1764,7 @@ python -m pytest
 ```
 Expected: every suite green; no new failures in the full run.
 
-- [ ] **Step 2: Manual smoke (server running, a CV uploaded, an application with a drafted cover letter)**
+- [x] **Step 2: Manual smoke (server running, a CV uploaded, an application with a drafted cover letter)**
 
 1. Open `/career` → Reviewers tab: four cards (Recruiter screener, Hiring manager, Senior engineer, HR / People partner), all Ready.
 2. Applications → open the application → "Run panel review". The button reads "Panel in session…", the four cards show Busy and pulse; within one or two polls they flip to verdict chips with hatched score bars; the chair's synthesis appears with Verdict / Consolidated edits / Send-ready checklist; a toast "Panel verdict for …" arrives within 30 s.
@@ -1774,7 +1774,7 @@ Expected: every suite green; no new failures in the full run.
 6. Open an application with no cover letter → "Run panel review" is disabled; POSTing directly returns 409.
 7. `/council` → Members still shows five council members only.
 
-- [ ] **Step 3: Final commit (if anything was touched during smoke)**
+- [x] **Step 3: Final commit (if anything was touched during smoke)**
 
 ```bash
 git add -A
@@ -1785,8 +1785,8 @@ git commit -m "chore(career): reviewer panel smoke fixes"
 
 ## Done when
 
-- [ ] `tests/test_career_review_*.py`, `tests/test_career_templates.py` and the council suites pass; full `python -m pytest` has no new failures.
-- [ ] Running the panel on an application produces four persisted reviewer verdicts with scores, a chair's synthesis, an aggregate `overall` and `panel_verdict`, and updates `latest_review_id`.
-- [ ] Reviews serialise on the career queue; a failing LLM call lands as `status="error"` and leaves the queue empty.
-- [ ] Reviewer personas are editable (name, personality, model, endpoint) from the Reviewers tab and never appear in the council office.
-- [ ] The application detail view shows Busy → verdict cards with hatched AI score bars, the synthesis, and an "Open letter in editor" link.
+- [x] `tests/test_career_review_*.py`, `tests/test_career_templates.py` and the council suites pass; full `python -m pytest` has no new failures.
+- [x] Running the panel on an application produces four persisted reviewer verdicts with scores, a chair's synthesis, an aggregate `overall` and `panel_verdict`, and updates `latest_review_id`.
+- [x] Reviews serialise on the career queue; a failing LLM call lands as `status="error"` and leaves the queue empty.
+- [x] Reviewer personas are editable (name, personality, model, endpoint) from the Reviewers tab and never appear in the council office.
+- [x] The application detail view shows Busy → verdict cards with hatched AI score bars, the synthesis, and an "Open letter in editor" link.
