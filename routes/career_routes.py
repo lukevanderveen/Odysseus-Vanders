@@ -11,10 +11,11 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, field_validator
 
 from core.database import CrewMember, JobApplication, SessionLocal
+from routes.career_files_routes import register_file_routes
 from routes.career_helpers import APPLICATION_STATUSES, application_to_dict, get_owned_application
 from services.career.seeds import REVIEWER_DEPARTMENTS, seed_reviewers, seed_skills
 from services.career.settings import load_career_settings, save_career_settings
@@ -198,4 +199,5 @@ def setup_career_routes(skills_manager, rag_manager) -> APIRouter:
         finally:
             db.close()
 
+    register_file_routes(router, _owner, rag_manager)
     return router
