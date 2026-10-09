@@ -233,3 +233,38 @@ def _derive_title(content: str) -> str:
             return title or "Untitled"
 
     return "Untitled"
+
+
+def create_library_document(db, *, owner, title: str, content: str,
+                            language: Optional[str] = None, session_id: Optional[str] = None,
+                            source: str = "user") -> Document:
+    """Create a Document plus its first DocumentVersion and commit.
+
+    Shared by POST /api/document and server-side features (Career cover
+    letters) that need a session-less "library" document. Language is sniffed
+    from content when not supplied; email-shaped content is always "email".
+    """
+    import uuid as _uuid
+    from src.tool_implementations import _looks_like_email_document, _sniff_doc_language
+
+    lang = language or _sniff_doc_language(content)
+    if _looks_like_email_document(content, title):
+        lang = "email"
+    doc = Document(
+        id=str(_uuid.uuid4()), session_id=session_id, title=title, language=lang,
+        current_content=content, version_count=1, is_active=True, owner=owner,
+    )
+    ver = DocumentVersion(
+        id=str(_uuid.uuid4()), document_id=doc.id, version_number=1,
+        content=content, summary="Initial version", source=source,
+    )
+    db.add(doc)
+    db.add(ver)
+    db.commit()
+    db.refresh(doc)
+    try:
+        from src.event_bus import fire_event
+        fire_event("document_created", doc.owner)
+    except Exception:
+        logger.debug("document_created event dispatch failed", exc_info=True)
+    return doc
