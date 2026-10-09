@@ -35123,6 +35123,17 @@ body.theme-frosted .modal {
 .career-panel-summary { max-height: 480px; }
 .career-detail .projects-grid { padding-top: 4px; }
 .career-detail .proj-summary-body { max-height: 260px; }
+/* Posts tab (plan 03) */
+.career-posts { display: flex; flex-direction: column; gap: 6px; padding: 8px 2px; }
+.career-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.career-project-list, .career-activity-list, .career-hooks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.career-project-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.career-disclosure { max-width: 140px; }
+.career-activity-item { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; font-size: 12px; }
+.career-activity-date, .career-activity-project { opacity: 0.6; }
+.career-activity-body { flex-basis: 100%; }
+.career-post-body { white-space: pre-wrap; font-family: inherit; font-size: 12px; margin: 0; max-height: 320px; overflow-y: auto; }
+.career-hooks li { font-size: 12px; opacity: 0.85; }
 
 /* ── Office view (Agent Council Phase 4) ──────────────────────────────── */
 .office-canvas {

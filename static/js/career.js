@@ -11,6 +11,7 @@ import { readSettingsForm, setupHtml } from './careerSetup.js';
 import { installCoverLetter } from './careerCoverLetter.js';
 import { installReviewers } from './careerReviewers.js';
 import { installReview } from './careerReview.js';
+import { installPosts } from './careerPosts.js';
 
 const _tabRenderers = {};
 const _clickHandlers = [];
@@ -238,5 +239,6 @@ const careerApi = { open, close, isOpen, refresh, render, registerTab, onPanelCl
 installCoverLetter(careerApi);
 installReviewers(careerApi);
 installReview(careerApi);
+installPosts(careerApi);
 
 export default careerApi;
