@@ -692,6 +692,10 @@ app.include_router(setup_project_routes())
 from routes.council_routes import setup_council_routes
 app.include_router(setup_council_routes())
 
+# Career hub (cover letters, reviewer panel, posts, job tracker)
+from routes.career_routes import setup_career_routes
+app.include_router(setup_career_routes(skills_manager, rag_manager))
+
 # Email
 from routes.email_routes import setup_email_routes
 app.include_router(setup_email_routes())
