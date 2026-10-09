@@ -90,8 +90,51 @@ def _email_tag_owner_aliases(account_id: str | None, owner: str = "") -> list[st
     return out or [""]
 
 
+# Server-side observers of NEW inbox mail. The only place new mail is detected
+# is the list route below (the browser polls it every 60 s), so features that
+# need per-message processing (Career tracker) subscribe here rather than
+# running their own IMAP watcher. Each subscriber is
+# `async fn(owner, account_id, fresh_list_dicts)` and runs as a fire-and-forget
+# task: the list response never waits on it.
+_NEW_MAIL_SUBSCRIBERS: list = []
+_NEW_MAIL_TASKS: set = set()   # strong refs so pending tasks are not GC'd
+
+
+def register_new_mail_subscriber(fn) -> None:
+    if fn not in _NEW_MAIL_SUBSCRIBERS:
+        _NEW_MAIL_SUBSCRIBERS.append(fn)
+
+
+def _on_new_mail_task_done(task: asyncio.Task) -> None:
+    _NEW_MAIL_TASKS.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        logger.warning("new-mail subscriber failed: %s", exc)
+
+
+def _dispatch_new_mail(owner: str, account_id: str | None, fresh: list[dict]) -> None:
+    if not fresh or not _NEW_MAIL_SUBSCRIBERS:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.debug("new-mail subscribers skipped: no running loop")
+        return
+    for fn in list(_NEW_MAIL_SUBSCRIBERS):
+        try:
+            task = loop.create_task(fn(owner, account_id, fresh))
+        except Exception:
+            logger.warning("new-mail subscriber could not be scheduled", exc_info=True)
+            continue
+        _NEW_MAIL_TASKS.add(task)
+        task.add_done_callback(_on_new_mail_task_done)
+
+
 def _record_email_received_events(owner: str, account_id: str | None, folder: str, emails: list[dict]):
-    """Baseline inbox messages, then fire `email_received` for new arrivals."""
+    """Baseline inbox messages, then fire `email_received` for new arrivals and
+    hand the new list dicts to registered subscribers."""
     if not owner or (folder or "INBOX").upper() != "INBOX" or not emails:
         return
     try:
@@ -141,6 +184,9 @@ def _record_email_received_events(owner: str, account_id: str | None, folder: st
             for _ in new_keys[:50]:
                 fire_event("email_received", owner)
             logger.info("Fired email_received for %d new message(s)", min(len(new_keys), 50))
+            new_set = set(new_keys)
+            fresh = [e for e in emails if (e.get("message_id") or e.get("uid") or "").strip() in new_set]
+            _dispatch_new_mail(owner, account_id, fresh)
     except Exception:
         logger.debug("email_received event detection skipped", exc_info=True)
 

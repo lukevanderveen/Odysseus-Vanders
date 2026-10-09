@@ -194,6 +194,7 @@ HOUSEKEEPING_DEFAULTS = {
     "classify_events":      {"name": "Calendar Classify Events", "schedule": "cron",  "scheduled_time": None,    "cron_expression": "0 6,18 * * *", "ship_paused": True, "legacy_names": ["Classify Calendar Events"]},
     "mark_email_boundaries": {"name": "Email Mark Boundaries",   "schedule": "cron",  "scheduled_time": None,    "cron_expression": "0 */2 * * *", "legacy_names": ["Mark Email Boundaries"]},
     "check_email_urgency":   {"name": "Email Tags",               "schedule": "cron",  "scheduled_time": None,    "cron_expression": "0 * * * *", "ship_paused": True, "old_cron_expressions": ["*/15 * * * *"], "legacy_names": ["Email Triage", "Urgent Email"]},
+    "scan_job_emails":       {"name": "Career Tracker Catch-up",  "schedule": "cron",  "scheduled_time": None,    "cron_expression": "0 */6 * * *", "ship_paused": True, "legacy_names": []},
     "audit_skills":          {"name": "Skills Audit",             "trigger_type": "event", "trigger_event": "skill_added", "trigger_count": 5, "schedule": None, "scheduled_time": None, "cron_expression": None, "legacy_names": ["Audit Skills"]},
 }
 
@@ -868,6 +869,7 @@ class TaskScheduler:
     # content) — don't pollute the assistant chat session with their summaries.
     # Activity log + reminder email already carry everything the user needs.
     _SILENT_ACTIONS = frozenset({
+        "scan_job_emails",
         "check_email_urgency",
         "mark_email_boundaries",
         "learn_sender_signatures",
@@ -884,6 +886,7 @@ class TaskScheduler:
     })
 
     _MODEL_BACKED_ACTIONS = frozenset({
+        "scan_job_emails",
         "summarize_emails",
         "draft_email_replies",
         "extract_email_events",

@@ -2187,6 +2187,12 @@ async def action_check_email_urgency(owner: str, **kwargs) -> Tuple[str, bool]:
         return str(e), False
 
 
+async def _lazy_scan_job_emails(owner: str, **kwargs):
+    # Lazy so builtin_actions never imports the career ORM models at module load.
+    from services.career.tracker_scan import action_scan_job_emails
+    return await action_scan_job_emails(owner, **kwargs)
+
+
 BUILTIN_ACTIONS = {
     "tidy_sessions": action_tidy_sessions,
     "tidy_documents": action_tidy_documents,
@@ -2207,6 +2213,7 @@ BUILTIN_ACTIONS = {
     "test_skills": action_test_skills,
     "audit_skills": action_audit_skills,
     "check_email_urgency": action_check_email_urgency,
+    "scan_job_emails": _lazy_scan_job_emails,
     # ping_notes removed from the registry — runs only inside `_note_pings_loop`.
 }
 
@@ -2228,4 +2235,5 @@ BUILTIN_ACTION_INFO = {
     "test_skills": "Run the per-skill Test on every skill: agent run + LLM judge → records verdict on the skill (pass/needs_work/fail/inconclusive). Advisory only — never rewrites or demotes anything.",
     "audit_skills": "Audit unaudited skills after enough new skills are added: test, narrow metadata, self-edit/retry, optional teacher rewrite, tag duplicates/trivial skills, and publish/draft using the auto-approve threshold.",
     "check_email_urgency": "Scan unread emails hourly, tag urgent/reply-soon/newsletter/marketing/spam, and send a reminder when a new email needs a fast reply.",
+    "scan_job_emails": "Career tracker catch-up: classify the last 7 days of inbox mail into job application events (the live tracker already runs whenever Odysseus is open).",
 }
