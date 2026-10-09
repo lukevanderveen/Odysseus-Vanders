@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from core.database import CrewMember, Project, Report, SessionLocal
-from services.council.personas import seed_council_members
+from services.council.personas import DEPARTMENTS, seed_council_members
 from services.council.runner import (
     COMPONENT_TYPES as REPORT_TYPES,
     queue_state,
@@ -226,7 +226,7 @@ def setup_council_routes():
                 if rid in dept_of:
                     queue_position.setdefault(dept_of[rid], pos)
 
-            mq = db.query(CrewMember).filter(CrewMember.department.isnot(None))
+            mq = db.query(CrewMember).filter(CrewMember.department.in_(DEPARTMENTS))
             if user is not None:
                 mq = mq.filter(CrewMember.owner == user)
             members = []
@@ -257,7 +257,7 @@ def setup_council_routes():
         seed_council_members(user, session_factory=SessionLocal)  # idempotent
         db = SessionLocal()
         try:
-            q = db.query(CrewMember).filter(CrewMember.department.isnot(None))
+            q = db.query(CrewMember).filter(CrewMember.department.in_(DEPARTMENTS))
             if user is not None:
                 q = q.filter(CrewMember.owner == user)
             members = q.order_by(CrewMember.name).all()
@@ -270,7 +270,8 @@ def setup_council_routes():
         user = _owner(request)
         db = SessionLocal()
         try:
-            q = db.query(CrewMember).filter(CrewMember.id == mid)
+            q = db.query(CrewMember).filter(CrewMember.id == mid,
+                                            CrewMember.department.in_(DEPARTMENTS))
             if user is not None:
                 q = q.filter(CrewMember.owner == user)
             member = q.first()
