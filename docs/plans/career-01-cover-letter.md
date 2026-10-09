@@ -33,7 +33,7 @@
 - Consumes: `src.rag_singleton.get_rag_manager()` → `VectorRAG.search(query, k, owner=)` (`src/rag_vector.py:173`), results are dicts `{"document", "metadata": {"filename", ...}, "similarity", ...}`.
 - Produces: `cv_chunks(owner, query, k=8, rag=None) -> list[str]`, `example_pairs(owner, jd_text, k=2, rag=None) -> list[str]`, `CV_PREFIX = "cv-"`, `EXAMPLE_PREFIX = "cover-letter-example-"`, `SIMILARITY_THRESHOLD = 0.35`, `FETCH_K = 40`, and `class Evidence` with the same two methods bound to an owner (what the cover-letter service and plan 02 take as `evidence`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_evidence.py
@@ -99,12 +99,12 @@ def test_evidence_object_binds_owner():
     assert rag.calls[-1]["owner"] == "vanders"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_evidence.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.evidence'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/evidence.py
@@ -174,12 +174,12 @@ class Evidence:
         return example_pairs(self.owner, jd_text, k=k, rag=self._rag)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_evidence.py -v`
 Expected: 5 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/evidence.py tests/test_career_evidence.py
@@ -206,7 +206,7 @@ No work in this plan. `services/career/llm.py` (`complete`, `complete_utility`, 
 - Consumes: Task 1 `Evidence`, Task 2 `complete` + `render_template`, `services.career.settings.load_career_settings(owner)`.
 - Produces: `load_prompt(name) -> str` (user override at `data/career/prompts/<name>.md`, else packaged); `async extract_requirements(jd_text, complete, owner) -> {"hard": list[str], "nice": list[str]}`; `async draft_cover_letter(app, owner, complete, evidence, requirements=None) -> tuple[str, list[dict]]` returning `(markdown, claims)` where each claim is `{"claim": str, "evidence": str}`; `rubric_check(markdown, hard_requirements) -> list[str]`; `split_claims(text) -> (body, claims)`; `BANNED_PHRASES`, `MAX_WORDS = 300`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_cover_letter.py
@@ -340,12 +340,12 @@ def test_rubric_passes_a_clean_letter():
     assert cl.rubric_check(letter, ["FastAPI", "PostgreSQL", "Python"]) == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_cover_letter.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.cover_letter'`
 
-- [ ] **Step 3: Write the prompt templates**
+- [x] **Step 3: Write the prompt templates**
 
 `services/career/prompts/requirements.md`:
 
@@ -408,7 +408,7 @@ the evidence snippet it came from:
 ```
 ```
 
-- [ ] **Step 4: Implement the service**
+- [x] **Step 4: Implement the service**
 
 ```python
 # services/career/cover_letter.py
@@ -546,12 +546,12 @@ def rubric_check(markdown: str, hard_requirements: List[str]) -> List[str]:
     return warnings
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_cover_letter.py -v`
 Expected: 11 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add services/career/prompts services/career/cover_letter.py tests/test_career_cover_letter.py
@@ -579,7 +579,7 @@ Routes:
 | POST | `/applications/{id}/cover-letter` | `{doc_id, version, claims, rubric_warnings, requirements}`; 409 no CV / no JD / no evidence; 503 no RAG |
 | GET | `/applications/{id}/cover-letter` | same shape from disk, or `{doc_id: null, claims: [], rubric_warnings: [], requirements: {}}` |
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_cover_letter_routes.py
@@ -737,12 +737,12 @@ def test_get_before_any_draft_is_empty(env):
         "doc_id": None, "version": 0, "claims": [], "rubric_warnings": [], "requirements": {}}
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_cover_letter_routes.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'routes.career_studio_routes'`
 
-- [ ] **Step 3: Implement the claims store**
+- [x] **Step 3: Implement the claims store**
 
 ```python
 # services/career/claims_store.py
@@ -787,7 +787,7 @@ def load_claims(owner: Optional[str], application_id: str) -> Optional[Dict[str,
         return None
 ```
 
-- [ ] **Step 4: Implement the router**
+- [x] **Step 4: Implement the router**
 
 ```python
 # routes/career_studio_routes.py
@@ -897,12 +897,12 @@ from routes.career_studio_routes import setup_career_studio_routes
 app.include_router(setup_career_studio_routes(rag_manager))
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_cover_letter_routes.py tests/test_document_library_create.py -v`
 Expected: all passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add routes/career_studio_routes.py services/career/claims_store.py app.py tests/test_career_cover_letter_routes.py
@@ -920,7 +920,7 @@ git commit -m "feat(career): cover-letter route creating/versioning a library do
 **Interfaces:**
 - Consumes: `services.career.seeds.seed_skills` (plan 00) copies this folder to `data/skills/career/cover-letter-writer/` on bootstrap; `services.memory.skill_format.Skill.from_markdown`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_cover_letter_skill.py
@@ -954,12 +954,12 @@ def test_skill_names_the_routes_and_constraints():
     assert "never invent" in text.lower()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_cover_letter_skill.py -v`
 Expected: FAIL with `FileNotFoundError`
 
-- [ ] **Step 3: Write the skill**
+- [x] **Step 3: Write the skill**
 
 `services/career/skills/cover-letter-writer/SKILL.md`:
 
@@ -1004,12 +1004,12 @@ When I ask for a cover letter, to tailor an application to a job description, or
 - The response links #document-{doc_id} so the letter opens in the editor.
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_cover_letter_skill.py tests/test_career_skill_seeding.py -v`
 Expected: all passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/skills/cover-letter-writer/SKILL.md tests/test_career_cover_letter_skill.py
@@ -1033,7 +1033,7 @@ git commit -m "feat(career): seeded cover-letter-writer skill"
 
 State kept inside `careerCoverLetter.js`: `_letters: Map<appId, payload>` (fetched lazily per opened application) and `_busy: Set<appId>`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_cover_letter_js.py
@@ -1111,12 +1111,12 @@ def test_wiring_and_syntax(node_available):
         assert res.returncode == 0, res.stderr
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_cover_letter_js.py -v`
 Expected: FAIL with `Cannot find module` for `careerCoverLetterLogic.js`
 
-- [ ] **Step 3: `static/js/careerCoverLetterLogic.js`**
+- [x] **Step 3: `static/js/careerCoverLetterLogic.js`**
 
 ```javascript
 // ============================================
@@ -1154,7 +1154,7 @@ export const letterSectionHtml = (app, letter, busy, esc) => {
 };
 ```
 
-- [ ] **Step 4: `static/js/careerCoverLetter.js`**
+- [x] **Step 4: `static/js/careerCoverLetter.js`**
 
 ```javascript
 // ============================================
@@ -1218,7 +1218,7 @@ export const installCoverLetter = (api) => {
 };
 ```
 
-- [ ] **Step 5: Wire the import and styles**
+- [x] **Step 5: Wire the import and styles**
 
 In `static/js/career.js`, add one import line after the existing `import { readSettingsForm, setupHtml } from './careerSetup.js';` line, and one install line inside the `// ── plugins ──` block (after `const careerApi = ...`, before `export default careerApi;`):
 
@@ -1242,12 +1242,12 @@ Append to the `/* ── Career hub ── */` section of `static/style.css`:
 .career-rubric-warning { color: #d9a13b; }
 ```
 
-- [ ] **Step 6: Run the tests**
+- [x] **Step 6: Run the tests**
 
 Run: `python -m pytest tests/test_career_cover_letter_js.py tests/test_career_js.py -v`
 Expected: all passed
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add static/js/careerCoverLetter.js static/js/careerCoverLetterLogic.js static/js/career.js static/style.css tests/test_career_cover_letter_js.py
@@ -1258,7 +1258,7 @@ git commit -m "feat(career): cover letter section in the application detail view
 
 ### Task 7: Full verification and smoke test
 
-- [ ] **Step 1: Syntax and suites**
+- [x] **Step 1: Syntax and suites**
 
 ```bash
 python -m py_compile app.py routes/career_studio_routes.py services/career/evidence.py services/career/llm.py services/career/cover_letter.py services/career/claims_store.py
@@ -1268,7 +1268,7 @@ python -m pytest
 ```
 Expected: every suite green; the full run shows no new failures compared with the tree before this plan.
 
-- [ ] **Step 2: Manual smoke (server running, a Task or Utility model configured)**
+- [x] **Step 2: Manual smoke (server running, a Task or Utility model configured)**
 
 1. Open `/career` → Setup → upload your CV (PDF or DOCX) → toast with chunk count.
 2. Applications → Add application: company, role, paste a real job description → Save.
@@ -1278,7 +1278,7 @@ Expected: every suite green; the full run shows no new failures compared with th
 6. Remove the CV setting (Setup → upload nothing; or `PUT /api/career/settings {"cv_filename": ""}`) and draft again → error toast says to upload a CV in Setup.
 7. In chat (agent mode, admin): "/cover-letter-writer <paste a JD>" → the agent creates the application through `app_api`, drafts, and replies with the letter, the claims table and a `#document-<id>` link.
 
-- [ ] **Step 3: Final commit (if smoke required fixes)**
+- [x] **Step 3: Final commit (if smoke required fixes)**
 
 ```bash
 git add -A
@@ -1289,8 +1289,8 @@ git commit -m "chore(career): cover letter smoke fixes"
 
 ## Done when
 
-- [ ] `tests/test_career_evidence.py`, `test_career_llm.py`, `test_career_cover_letter.py`, `test_career_cover_letter_routes.py`, `test_career_cover_letter_skill.py`, `test_career_cover_letter_js.py` pass; full `python -m pytest` has no new failures.
-- [ ] `POST /api/career/applications/{id}/cover-letter` creates one library document per application and versions it on regenerate; the stored document contains no JSON fence.
-- [ ] 409 responses cover: no CV configured, no CV chunks retrievable, empty job description; 503 when RAG is down.
-- [ ] The Applications detail view shows Draft/Regenerate, "Open in editor", the claims check and rubric warnings.
-- [ ] `data/skills/career/cover-letter-writer/SKILL.md` exists after a hub bootstrap and the `/cover-letter-writer` slash command drives the same route through `app_api`.
+- [x] `tests/test_career_evidence.py`, `test_career_llm.py`, `test_career_cover_letter.py`, `test_career_cover_letter_routes.py`, `test_career_cover_letter_skill.py`, `test_career_cover_letter_js.py` pass; full `python -m pytest` has no new failures.
+- [x] `POST /api/career/applications/{id}/cover-letter` creates one library document per application and versions it on regenerate; the stored document contains no JSON fence.
+- [x] 409 responses cover: no CV configured, no CV chunks retrievable, empty job description; 503 when RAG is down.
+- [x] The Applications detail view shows Draft/Regenerate, "Open in editor", the claims check and rubric warnings.
+- [x] `data/skills/career/cover-letter-writer/SKILL.md` exists after a hub bootstrap and the `/cover-letter-writer` slash command drives the same route through `app_api`.

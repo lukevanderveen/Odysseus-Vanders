@@ -35113,6 +35113,12 @@ body.theme-frosted .modal {
 .career-tile { padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
 .career-tile-num { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .career-tile-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.06em; }
+/* Cover letter section (plan 01) */
+.career-letter { display: flex; flex-direction: column; gap: 6px; }
+.career-claim-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.career-claim { display: flex; flex-direction: column; font-size: 12px; padding: 6px 8px; border-left: 3px solid #5dbf6e; }
+.career-rubric { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
+.career-rubric-warning { color: #d9a13b; }
 
 /* ── Office view (Agent Council Phase 4) ──────────────────────────────── */
 .office-canvas {

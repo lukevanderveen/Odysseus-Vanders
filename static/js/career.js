@@ -8,6 +8,7 @@ import uiModule from './ui.js';
 import { placeholderHtml, TABS } from './careerLogic.js';
 import { addFormHtml, detailHtml, listHtml } from './careerApplications.js';
 import { readSettingsForm, setupHtml } from './careerSetup.js';
+import { installCoverLetter } from './careerCoverLetter.js';
 
 const _tabRenderers = {};
 const _clickHandlers = [];
@@ -232,5 +233,6 @@ const careerApi = { open, close, isOpen, refresh, render, registerTab, onPanelCl
 // in the temporal dead zone while a dependency evaluates). Each `install(api)`
 // calls api.registerTab / api.onPanelClick and may import `detailSections`
 // from careerApplications.js; it must not fetch or render at load.
+installCoverLetter(careerApi);
 
 export default careerApi;
