@@ -15,9 +15,12 @@ from fastapi import APIRouter, HTTPException, Request
 
 from core.database import ApplicationReview, Document, DocumentVersion, JobApplication, SessionLocal
 from routes.career_helpers import get_owned_application
+from routes.career_posts_routes import register_post_routes
 from routes.career_review_helpers import ReviewerUpdate, review_to_dict, reviewer_query, reviewer_to_dict
 from routes.document_helpers import create_library_document
+from services.career.activity_remote import gather_activity
 from services.career.claims_store import load_claims, save_claims
+from services.career.posts import draft_post
 from services.career.cover_letter import NoEvidenceError, draft_cover_letter, extract_requirements, rubric_check
 from services.career.evidence import Evidence
 from services.career.llm import complete
@@ -198,4 +201,13 @@ def setup_career_studio_routes(rag_manager) -> APIRouter:
         finally:
             db.close()
 
+    # ── Activity + LinkedIn posts (plan 03) ─────────────────────────────────
+    # Collaborators are passed as callables that resolve this module's globals
+    # at call time, so tests patch gather_activity / draft_post / SessionLocal here.
+    register_post_routes(
+        router, _owner,
+        session_factory=lambda: SessionLocal(),
+        gather=lambda *a, **kw: gather_activity(*a, **kw),
+        draft=lambda *a, **kw: draft_post(*a, **kw),
+    )
     return router
