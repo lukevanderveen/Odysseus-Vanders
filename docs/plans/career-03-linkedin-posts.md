@@ -39,7 +39,7 @@ No work in this plan. `services/career/llm.py` (`complete`, `complete_utility`, 
 **Interfaces:**
 - Produces: `ActivityItem` dataclass (`source, project_id, project_name, title, body, date, url, kind`; `to_dict()`), `item_from_dict(d)`, `fetch_local_git(project, since: datetime) -> tuple[list[ActivityItem], str | None]`. `project` is anything with `.id`, `.name`, `.path` (the `Project` ORM row or a test stub).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_activity_sources.py
@@ -118,12 +118,12 @@ def test_activity_item_roundtrip():
     assert acts.item_from_dict(item.to_dict()) == item
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_activity_sources.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.activity_sources'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/activity_sources.py
@@ -215,12 +215,12 @@ def fetch_local_git(project, since: datetime) -> Tuple[List[ActivityItem], Optio
     return _parse_git_log(res.stdout, project), None
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_activity_sources.py -v`
 Expected: 5 passed (or skipped where git is missing)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/activity_sources.py tests/test_career_activity_sources.py
@@ -239,7 +239,7 @@ git commit -m "feat(career): ActivityItem and local git activity source"
 - Consumes: `src.integrations.execute_api_call`, `load_integrations`; `core.database.Project`, `SessionLocal`.
 - Produces: `resolve_integration_id(preset: str) -> str | None`, `async fetch_github(since, execute=execute_api_call)`, `async fetch_trello(since, execute=execute_api_call)`, `async gather_activity(owner, days, sources, project_ids, session_factory=None, execute=execute_api_call) -> tuple[list[ActivityItem], list[str]]`. `sources` ⊆ `{"git","github","trello"}`.
 
-- [ ] **Step 1: Append the failing tests**
+- [x] **Step 1: Append the failing tests**
 
 ```python
 # append to tests/test_career_activity_sources.py
@@ -384,12 +384,12 @@ async def test_gather_merges_sources_and_collects_warnings(monkeypatch, repo):
     assert warnings == ["GitHub integration not registered"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/test_career_activity_sources.py -v`
 Expected: new tests FAIL with `ModuleNotFoundError: No module named 'services.career.activity_remote'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/activity_remote.py
@@ -565,12 +565,12 @@ async def gather_activity(owner: Optional[str], days: int, sources: Set[str], pr
     return items, warnings
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/test_career_activity_sources.py -v`
 Expected: all passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/activity_remote.py tests/test_career_activity_sources.py
@@ -589,7 +589,7 @@ git commit -m "feat(career): GitHub and Trello activity sources with gather"
 - Consumes: `ActivityItem`, settings keys `disclosure_default`, `project_disclosure`, `blocklist_terms`.
 - Produces: `LEVELS`, `level_for(project_id, settings) -> str`, `redact_text(text, blocklist=()) -> str`, `apply_disclosure(items, settings) -> list[ActivityItem]`, `ANONYMOUS_NAME = "a project I'm building"`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_disclosure.py
@@ -655,12 +655,12 @@ def test_apply_disclosure_three_levels():
     assert public.project_name == "Odysseus" and "tool_index.py" in public.title and "ghp_" not in public.body
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_disclosure.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.disclosure'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # services/career/disclosure.py
@@ -750,12 +750,12 @@ def apply_disclosure(items: Iterable[ActivityItem], settings: Dict[str, Any]) ->
     return out
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_disclosure.py -v`
 Expected: all passed. If `host_port` eats a time like `10:30`, that is acceptable (it is redacted, not leaked).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/disclosure.py tests/test_career_disclosure.py
@@ -775,7 +775,7 @@ git commit -m "feat(career): activity redaction and per-project disclosure level
 - Consumes: `ActivityItem`, `services.career.llm.complete`, settings keys `voice_rules`, `target_roles`, `narrative_uses_tracker_stats`.
 - Produces: `POST_TYPES`, `build_post_messages(items, post_type, settings, tracker_stats=None) -> list[dict]`, `parse_post_output(raw) -> {"body", "hooks"}`, `async draft_post(items, post_type, settings, owner, complete=complete, n_variants=2, tracker_stats=None) -> list[{"body","hooks"}]`, `post_to_dict(post: CareerPost) -> dict`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_posts.py
@@ -835,12 +835,12 @@ async def test_draft_post_requires_items():
         await posts.draft_post([], "progress", {}, "vanders", complete=None)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_posts.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.career.posts'`
 
-- [ ] **Step 3: Write the prompt templates**
+- [x] **Step 3: Write the prompt templates**
 
 `services/career/prompts/post_rules.md`:
 
@@ -885,7 +885,7 @@ Post type: job-search narrative. Open-to-work style. Say what roles the author i
 building recently (from the activity below) and what kind of team they want. Confident, not pleading.
 ```
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 ```python
 # services/career/posts.py
@@ -985,12 +985,12 @@ def post_to_dict(post) -> Dict[str, Any]:
 
 Note on `narrative_uses_tracker_stats`: the test passes `tracker_stats` with settings lacking the key, and expects the stats line. The intent from the design is "only when the user opts in"; the route (Task 6) is where the gate lives — it only passes `tracker_stats` when the setting is true. Keep `build_post_messages` simple: if stats are given, they are used. Replace the `if tracker_stats and ...` line above with `if tracker_stats:`.
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_posts.py -v`
 Expected: 6 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add services/career/prompts services/career/posts.py tests/test_career_posts.py
@@ -1021,7 +1021,7 @@ git commit -m "feat(career): LinkedIn post drafting with packaged prompt templat
 
 **If `routes/career_studio_routes.py` already exists (plan 01)**: skip the "create" variant, add the imports and request models at module level, and paste the endpoints block before the final `return router`. Otherwise create the file as shown and mount it in `app.py` after the career router.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_posts_routes.py
@@ -1155,12 +1155,12 @@ def test_disclosure_saved_into_settings(env):
     assert client.put("/api/career/projects-disclosure", json={"project_id": "p1", "level": "nope"}).status_code == 422
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_posts_routes.py -v`
 Expected: FAIL with `ModuleNotFoundError` (new file) or `AttributeError: ... has no attribute 'gather_activity'` (file exists from plan 01)
 
-- [ ] **Step 3a: Create the router (only if the file does not exist)**
+- [x] **Step 3a: Create the router (only if the file does not exist)**
 
 ```python
 # routes/career_studio_routes.py
@@ -1206,7 +1206,7 @@ from routes.career_studio_routes import setup_career_studio_routes
 app.include_router(setup_career_studio_routes(rag_manager))
 ```
 
-- [ ] **Step 3b: Add the plan-03 models and endpoints**
+- [x] **Step 3b: Add the plan-03 models and endpoints**
 
 Module-level (after the imports; if the file came from plan 01, also add the four `services.career.*` imports and `CareerPost` above):
 
@@ -1380,12 +1380,12 @@ Inside `setup_career_studio_routes`, before `return router`:
         return save_career_settings(user, {"project_disclosure": current})
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_posts_routes.py -v`
 Expected: 5 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add routes/career_studio_routes.py app.py tests/test_career_posts_routes.py
@@ -1403,7 +1403,7 @@ git commit -m "feat(career): activity preview, post drafting and lifecycle route
 **Interfaces:**
 - Consumes: `services.career.seeds.seed_skills` (copies this folder into `data/skills/career/linkedin-post-writer/` on first `GET /api/career/bootstrap`, retiring the v1 `general/` skill).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_posts_skill.py
@@ -1426,12 +1426,12 @@ def test_skill_template_parses_with_expected_frontmatter():
     assert any("140" in v for v in sk.verification)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_posts_skill.py -v`
 Expected: FAIL with `FileNotFoundError`
 
-- [ ] **Step 3: Write the skill**
+- [x] **Step 3: Write the skill**
 
 ```markdown
 ---
@@ -1475,12 +1475,12 @@ When I ask to write or draft a LinkedIn post about a project, an update, somethi
 - The drafts exist in the Career hub (GET /api/career/posts returns them with status draft).
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/test_career_posts_skill.py tests/test_career_skill_seeding.py -v`
 Expected: all passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/career/skills/linkedin-post-writer/SKILL.md tests/test_career_posts_skill.py
@@ -1501,7 +1501,7 @@ git commit -m "feat(career): seeded linkedin-post-writer v2 skill"
 - Consumes: the plan 00 `career.js` plugin API object (`registerTab`, `onPanelClick`, `refresh`, `render`, `getState`) passed to `installPosts(api)`; `uiModule.esc/showToast/showError/styledConfirm` from `static/js/ui.js`; `GET /api/projects` (`{projects: [{id, name, exists, ...}]}`).
 - Produces: `careerPostsLogic.js` exports `cadenceLabel(posts, now)`, `postCardHtml(post, esc)`, `activityItemHtml(item, esc)`, `SOURCE_LABELS`, `POST_TYPE_LABELS`, `DISCLOSURE_LABELS`; `careerPosts.js` exports `installPosts(api)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_career_posts_js.py
@@ -1577,12 +1577,12 @@ def test_posts_module_wired_and_parses(node_available):
     assert "navigator.clipboard.writeText" in posts
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_career_posts_js.py -v`
 Expected: FAIL with `Cannot find module` / missing import assertion
 
-- [ ] **Step 3: `static/js/careerPostsLogic.js`**
+- [x] **Step 3: `static/js/careerPostsLogic.js`**
 
 ```javascript
 // ============================================
@@ -1639,7 +1639,7 @@ export const postCardHtml = (post, esc) => {
 };
 ```
 
-- [ ] **Step 4: `static/js/careerPosts.js`**
+- [x] **Step 4: `static/js/careerPosts.js`**
 
 ```javascript
 // ============================================
@@ -1844,7 +1844,7 @@ export const installPosts = (api) => {
 };
 ```
 
-- [ ] **Step 5: Wire into `career.js` and style**
+- [x] **Step 5: Wire into `career.js` and style**
 
 In `static/js/career.js`, add one import line after `import { readSettingsForm, setupHtml } from './careerSetup.js';` and one install line inside the `// ── plugins ──` block (after `const careerApi = ...`, before `export default careerApi;`):
 
@@ -1873,12 +1873,12 @@ Append to `static/style.css` after the Career hub block:
 .career-hooks li { font-size: 12px; opacity: 0.85; }
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `python -m pytest tests/test_career_posts_js.py tests/test_career_js.py -v`
 Expected: all passed
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add static/js/careerPosts.js static/js/careerPostsLogic.js static/js/career.js static/style.css tests/test_career_posts_js.py
@@ -1889,7 +1889,7 @@ git commit -m "feat(career): Posts tab with activity preview, drafting and discl
 
 ### Task 9: Full verification and smoke test
 
-- [ ] **Step 1: Suites and syntax**
+- [x] **Step 1: Suites and syntax**
 
 ```bash
 python -m py_compile routes/career_studio_routes.py services/career/*.py
@@ -1899,7 +1899,7 @@ python -m pytest
 ```
 Expected: all career suites green; the full run has no new failures.
 
-- [ ] **Step 2: Manual smoke (server running, logged in as admin)**
+- [x] **Step 2: Manual smoke (server running, logged in as admin)**
 
 1. Settings → Integrations → add preset **GitHub** (base `https://api.github.com`, api_key = a read-only PAT) and preset **Trello** (base `https://api.trello.com`, api_key = token, default_params `{"key": "<api key>"}`).
 2. Open `/career` → Posts. Untick GitHub and Trello, keep Local git, 14 days → **Preview activity**: commits from this repo appear with `a project I'm building` and `[redacted]` where file names were.
@@ -1908,7 +1908,7 @@ Expected: all career suites green; the full run has no new failures.
 5. Post type **Technique**, variants 2 → **Draft posts**: two cards with bodies and three hooks each. **Copy** puts the body on the clipboard. **Mark posted** moves the card to Posted and the cadence line reads "Last posted today".
 6. In chat with the agent: `/linkedin-post-writer progress update on what I built this fortnight` → the agent calls the activity route, shows the preview, drafts, and never offers to publish.
 
-- [ ] **Step 3: Final commit if smoke needed fixes**
+- [x] **Step 3: Final commit if smoke needed fixes**
 
 ```bash
 git add -A
@@ -1919,9 +1919,9 @@ git commit -m "chore(career): posts smoke fixes"
 
 ## Done when
 
-- [ ] `tests/test_career_activity_sources.py`, `test_career_disclosure.py`, `test_career_posts.py`, `test_career_posts_routes.py`, `test_career_posts_skill.py`, `test_career_posts_js.py` pass; full `python -m pytest` has no new failures.
-- [ ] `GET /api/career/activity` returns redacted items from local git, GitHub and Trello, with per-source warnings instead of errors.
-- [ ] Per-project disclosure levels persist in settings and change the preview immediately.
-- [ ] `POST /api/career/posts/draft` stores N variants as `CareerPost` drafts; copy / mark posted / discard work from the Posts tab.
-- [ ] `data/skills/career/linkedin-post-writer/SKILL.md` exists at v2.0.0 after the first `/career` open and the v1 `general/` folder is gone.
-- [ ] Nothing in the codebase can publish to LinkedIn.
+- [x] `tests/test_career_activity_sources.py`, `test_career_disclosure.py`, `test_career_posts.py`, `test_career_posts_routes.py`, `test_career_posts_skill.py`, `test_career_posts_js.py` pass; full `python -m pytest` has no new failures.
+- [x] `GET /api/career/activity` returns redacted items from local git, GitHub and Trello, with per-source warnings instead of errors.
+- [x] Per-project disclosure levels persist in settings and change the preview immediately.
+- [x] `POST /api/career/posts/draft` stores N variants as `CareerPost` drafts; copy / mark posted / discard work from the Posts tab.
+- [x] `data/skills/career/linkedin-post-writer/SKILL.md` exists at v2.0.0 after the first `/career` open and the v1 `general/` folder is gone.
+- [x] Nothing in the codebase can publish to LinkedIn.
