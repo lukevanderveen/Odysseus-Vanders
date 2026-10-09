@@ -36,6 +36,19 @@ def extract_office_text(file_path: str) -> str:
     return convert_to_markdown(file_path) or ""
 
 
+def extract_text_for_upload(file_path: str, raw: bytes) -> str:
+    """Text for an uploaded personal file: PDF via pypdf, office/epub via
+    markitdown, anything else decoded as UTF-8. Returns "" on failure so the
+    caller can count it as a failed upload instead of indexing garbage."""
+    from src.markitdown_runtime import is_markitdown_format
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == ".pdf":
+        return extract_pdf_text(file_path)
+    if is_markitdown_format(file_path):
+        return extract_office_text(file_path)
+    return raw.decode("utf-8", errors="replace")
+
+
 @dataclass
 class PersonalDocsConfig:
     """Configuration for personal documents management."""

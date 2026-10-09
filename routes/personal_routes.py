@@ -214,11 +214,8 @@ def setup_personal_routes(personal_docs_manager, rag_manager, rag_available):
                     f.write(content_bytes)
 
                 ext = os.path.splitext(safe_name)[1].lower()
-                if ext == ".pdf":
-                    from src.personal_docs import extract_pdf_text
-                    text = extract_pdf_text(file_path)
-                else:
-                    text = content_bytes.decode("utf-8", errors="replace")
+                from src.personal_docs import extract_text_for_upload
+                text = extract_text_for_upload(file_path, content_bytes)
 
                 if not text or not text.strip():
                     total_failed += 1
