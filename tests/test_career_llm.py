@@ -1,7 +1,17 @@
 """Career LLM helper: endpoint resolution order, call kwargs, template rendering."""
+import sys
+
 import pytest
 
-from services.career import llm as cl
+# Other test modules stub these during collection (tests/test_auth_regressions.py);
+# evict file-less stubs so the helper binds to the real functions it patches.
+for _name in ("src.endpoint_resolver", "src.llm_core", "services.career.llm"):
+    _mod = sys.modules.get(_name)
+    if _mod is not None and not getattr(_mod, "__file__", None):
+        sys.modules.pop(_name, None)
+        sys.modules.pop("services.career.llm", None)
+
+from services.career import llm as cl  # noqa: E402
 
 
 @pytest.fixture()
