@@ -758,6 +758,10 @@ async def serve_projects(request: Request):
 async def serve_council(request: Request):
     return await serve_index(request)
 
+@app.get("/career")
+async def serve_career(request: Request):
+    return await serve_index(request)
+
 @app.get("/memory")
 async def serve_memory(request: Request):
     return await serve_index(request)

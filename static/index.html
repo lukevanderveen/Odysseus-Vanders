@@ -145,6 +145,10 @@
           "<circle cx='22' cy='12' r='3' fill='none' stroke='" + ac + "' stroke-width='2.5'/>" +
           "<path d='M4 27 v-1 a8 8 0 0 1 16 0 v1' fill='none' stroke='" + ac + "' stroke-width='2.5' stroke-linecap='round'/>" +
           "<path d='M21 18 a6 6 0 0 1 7 6 v3' fill='none' stroke='" + ac + "' stroke-width='2.5' stroke-linecap='round'/>",
+        '/career':
+          "<rect x='5' y='10' width='22' height='15' rx='2' fill='none' stroke='" + ac + "' stroke-width='2.5'/>" +
+          "<path d='M12 10 V7 a2 2 0 0 1 2 -2 h4 a2 2 0 0 1 2 2 v3' fill='none' stroke='" + ac + "' stroke-width='2.5'/>" +
+          "<path d='M5 16 h22' fill='none' stroke='" + ac + "' stroke-width='2.5'/>",
       };
       var inner = SHAPES[path];
       if (!inner) return; // Root path keeps the default boat icon.
@@ -168,6 +172,7 @@
         '/library': 'Library — Odysseus',
         '/projects': 'Projects — Odysseus',
         '/council': 'Council — Odysseus',
+        '/career': 'Career — Odysseus',
       };
       if (titles[path]) document.title = titles[path];
       // Per-route Android home-screen icon. We swap the <link rel="manifest">
@@ -289,6 +294,28 @@
           </div>
           <p class="memory-desc doclib-desc" style="margin-top:6px;">Department agents draft reports on your projects — nothing is acted on until you approve.</p>
           <div class="projects-scroll"><div id="council-panel"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Career Modal -->
+  <div id="career-modal" class="modal hidden">
+    <div class="modal-content projects-modal-content" role="dialog" aria-label="Career" style="background:var(--bg)">
+      <div class="modal-header">
+        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>Career</h4>
+        <button class="close-btn" id="close-career-modal" aria-label="Close career modal">✖</button>
+      </div>
+      <div class="modal-body projects-modal-body">
+        <div class="admin-card" style="display:flex;flex-direction:column;overflow:hidden;flex:1;min-height:0;">
+          <div id="career-tabs" class="council-tabs">
+            <button class="memory-toolbar-btn" data-career-tab="tracker">Tracker</button>
+            <button class="memory-toolbar-btn active" data-career-tab="applications">Applications</button>
+            <button class="memory-toolbar-btn" data-career-tab="reviewers">Reviewers</button>
+            <button class="memory-toolbar-btn" data-career-tab="posts">Posts</button>
+            <button class="memory-toolbar-btn" data-career-tab="setup">Setup</button>
+          </div>
+          <p class="memory-desc doclib-desc" style="margin-top:6px;">Cover letters, a reviewer panel, LinkedIn drafts and a live application tracker — nothing is sent or published without you.</p>
+          <div class="projects-scroll"><div id="career-panel"></div></div>
         </div>
       </div>
     </div>
@@ -928,6 +955,14 @@
             <path d="M3 20v-1a6 6 0 0 1 6-6 6 6 0 0 1 6 6v1"/><path d="M16 13.5a4.5 4.5 0 0 1 5 4.5v2"/>
           </svg>
           <span class="grow">Council</span>
+        </div>
+        <div class="list-item" id="tool-career-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            style="flex-shrink:0;opacity:0.5;">
+            <rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/>
+          </svg>
+          <span class="grow">Career</span>
         </div>
         <div class="list-item" id="tool-research-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.5;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
