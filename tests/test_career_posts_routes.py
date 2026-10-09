@@ -136,3 +136,9 @@ def test_disclosure_saved_into_settings(env):
     res = client.put("/api/career/projects-disclosure", json={"project_id": "p1", "level": "public"})
     assert res.status_code == 200 and res.json()["project_disclosure"] == {"p1": "public"}
     assert client.put("/api/career/projects-disclosure", json={"project_id": "p1", "level": "nope"}).status_code == 422
+
+
+def test_disclosure_rejects_blank_project_id(env):
+    client, _, _ = env
+    assert client.put("/api/career/projects-disclosure", json={"project_id": " ", "level": "public"}).status_code == 422
+    assert cs.load_career_settings("vanders")["project_disclosure"] == {}

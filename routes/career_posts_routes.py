@@ -56,6 +56,13 @@ class DisclosureUpdate(BaseModel):
     project_id: str
     level: str
 
+    @field_validator("project_id")
+    @classmethod
+    def _project(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("project_id must not be blank")
+        return v.strip()
+
     @field_validator("level")
     @classmethod
     def _level(cls, v: str) -> str:
