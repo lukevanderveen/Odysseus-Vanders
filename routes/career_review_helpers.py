@@ -44,9 +44,14 @@ def reviewer_to_dict(m: CrewMember) -> Dict[str, Any]:
             "personality": m.personality, "model": m.model, "endpoint_url": m.endpoint_url}
 
 
-def reviewer_query(db, user: Optional[str]):
-    """CrewMember rows that are career reviewers, owner-scoped when a user is resolved."""
+def reviewer_query(db, user: Optional[str], member_id: Optional[str] = None):
+    """CrewMember rows that are career reviewers, ordered by department,
+    owner-scoped when a user is resolved, narrowed to one row when ``member_id``
+    is given. Every CrewMember reference lives here so callers never mix a
+    second mapped class into the same query."""
     q = db.query(CrewMember).filter(CrewMember.department.in_(REVIEWER_DEPARTMENTS))
     if user is not None:
         q = q.filter(CrewMember.owner == user)
-    return q
+    if member_id is not None:
+        q = q.filter(CrewMember.id == member_id)
+    return q.order_by(CrewMember.department)

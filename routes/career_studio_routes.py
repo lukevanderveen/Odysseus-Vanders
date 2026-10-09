@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Request
 
-from core.database import ApplicationReview, CrewMember, Document, DocumentVersion, JobApplication, SessionLocal
+from core.database import ApplicationReview, Document, DocumentVersion, JobApplication, SessionLocal
 from routes.career_helpers import get_owned_application
 from routes.career_review_helpers import ReviewerUpdate, review_to_dict, reviewer_query, reviewer_to_dict
 from routes.document_helpers import create_library_document
@@ -154,7 +154,7 @@ def setup_career_studio_routes(rag_manager) -> APIRouter:
         seed_reviewers(user, session_factory=SessionLocal)
         db = SessionLocal()
         try:
-            rows = reviewer_query(db, user).order_by(CrewMember.department).all()
+            rows = reviewer_query(db, user).all()
             return {"reviewers": [reviewer_to_dict(m) for m in rows]}
         finally:
             db.close()
@@ -171,7 +171,7 @@ def setup_career_studio_routes(rag_manager) -> APIRouter:
                 if user is not None:
                     q = q.filter(ApplicationReview.owner == user)
                 running = state["running"] if q.first() else None
-            rows = reviewer_query(db, user).order_by(CrewMember.department).all()
+            rows = reviewer_query(db, user).all()
             return {
                 "running": running,
                 "queued": list(state["queued"]),
@@ -186,7 +186,7 @@ def setup_career_studio_routes(rag_manager) -> APIRouter:
         user = _owner(request)
         db = SessionLocal()
         try:
-            member = reviewer_query(db, user).filter(CrewMember.id == mid).first()
+            member = reviewer_query(db, user, member_id=mid).first()
             if not member:
                 raise HTTPException(404, "Reviewer not found")
             for field in ("name", "avatar", "personality", "model", "endpoint_url"):
