@@ -72,7 +72,7 @@ def seed_council_members(owner: Optional[str], session_factory: Callable = None)
     factory = session_factory or SessionLocal
     db = factory()
     try:
-        q = db.query(CrewMember).filter(CrewMember.department.isnot(None))
+        q = db.query(CrewMember).filter(CrewMember.department.in_(DEPARTMENTS))
         if owner is not None:
             q = q.filter(CrewMember.owner == owner)
         covered = {m.department for m in q.all()}

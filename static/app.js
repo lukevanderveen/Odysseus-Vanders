@@ -38,6 +38,7 @@ import themeModule from './js/theme.js';
 import cookbookModule from './js/cookbook.js';
 import projectsModule from './js/projects.js';
 import councilModule from './js/council.js';
+import careerModule from './js/career.js';
 import groupModule from './js/group.js';
 import * as researchPanelModule from './js/research/panel.js';
 import ttsModule from './js/tts-ai.js';
@@ -830,6 +831,18 @@ function initializeEventListeners() {
     });
   }
 
+  // Career modal toggle
+  const toolCareerBtn = el('tool-career-btn');
+  if (toolCareerBtn) {
+    toolCareerBtn.addEventListener('click', async () => {
+      if (!careerModule) return;
+      const Modals = await import('./js/modalManager.js');
+      if (!Modals.toggle('career-modal')) {
+        careerModule.isOpen() ? careerModule.close() : careerModule.open();
+      }
+    });
+  }
+
   // Document library tool button
   const toolDoclibBtn = el('tool-doclib-btn');
   if (toolDoclibBtn) {
@@ -1029,6 +1042,7 @@ function initializeEventListeners() {
     '/library':  () => sessionModule && sessionModule.openLibrary && sessionModule.openLibrary(),
     '/projects': () => document.getElementById('tool-projects-btn')?.click(),
     '/council': () => document.getElementById('tool-council-btn')?.click(),
+    '/career': () => document.getElementById('tool-career-btn')?.click(),
   };
   const _opener = _routeOpen[urlPath];
   // Defer the opener — at this point in init, the modules whose handlers

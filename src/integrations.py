@@ -136,6 +136,33 @@ INTEGRATION_PRESETS: Dict[str, Dict[str, Any]] = {
             "  GET /api/greader.php/reader/api/0/unread-count?output=json — unread counts"
         ),
     },
+    "github": {
+        "name": "GitHub",
+        "auth_type": "bearer",
+        "base_url": "https://api.github.com",
+        "description": (
+            "GitHub REST API (v3). Base URL: https://api.github.com. api_key is a fine-grained personal access token "
+            "with repo read access. Key endpoints:\n"
+            "  GET /user/repos?sort=pushed&per_page=50 — your repositories\n"
+            "  GET /repos/{owner}/{repo}/commits?since=ISO8601 — commits since a date\n"
+            "  GET /repos/{owner}/{repo}/pulls?state=all&sort=updated&direction=desc — pull requests\n"
+            "  GET /repos/{owner}/{repo}/commits/{sha} — one commit with files"
+        ),
+    },
+    "trello": {
+        "name": "Trello",
+        "auth_type": "query",
+        "auth_param": "token",
+        "base_url": "https://api.trello.com",
+        "description": (
+            "Trello REST API. Base URL: https://api.trello.com. api_key is your Trello *token*; put your API key in "
+            "default_params as {\"key\": \"...\"} so every call carries both. Key endpoints:\n"
+            "  GET /1/members/me/boards?fields=name,url — your boards\n"
+            "  GET /1/boards/{id}/lists — lists on a board\n"
+            "  GET /1/boards/{id}/actions?since=ISO8601&filter=createCard,updateCard:idList,commentCard&limit=200 — recent card activity\n"
+            "  GET /1/cards/{id} — one card"
+        ),
+    },
 }
 
 # ---------------------------------------------------------------------------

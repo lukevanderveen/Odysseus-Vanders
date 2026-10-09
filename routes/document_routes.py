@@ -66,54 +66,18 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
                 if user and session.owner and session.owner != user:
                     raise HTTPException(403, "Cannot create document in another user's session")
 
-            doc_id = str(uuid.uuid4())
-            ver_id = str(uuid.uuid4())
-
-            # If no language was supplied (e.g. cloning a doc whose language
-            # was never set), detect it from the content rather than storing
-            # NULL — which made the editor fall back to plain text. Defaults
-            # to markdown for prose.
-            language = req.language
-            if not language:
-                from src.tool_implementations import _looks_like_email_document, _sniff_doc_language
-                language = _sniff_doc_language(req.content)
-            else:
-                from src.tool_implementations import _looks_like_email_document
-            if _looks_like_email_document(req.content, req.title):
-                language = "email"
-
             _assert_pdf_marker_upload_owned(request, req.content, user, upload_handler)
 
-            doc = Document(
-                id=doc_id,
+            # Language is sniffed from content when not supplied (see
+            # create_library_document). Ownership is stamped directly so the
+            # doc survives its session being deleted; fall back to the
+            # session's owner when the request is unauthenticated.
+            from routes.document_helpers import create_library_document
+            doc = create_library_document(
+                db, owner=user or (session.owner if session else None),
+                title=req.title, content=req.content, language=req.language,
                 session_id=req.session_id,
-                title=req.title,
-                language=language,
-                current_content=req.content,
-                version_count=1,
-                is_active=True,
-                # Stamp ownership directly so the doc survives its session
-                # being deleted. Fall back to the session's owner when the
-                # request is unauthenticated (single-user / localhost bypass).
-                owner=user or (session.owner if session else None),
             )
-            ver = DocumentVersion(
-                id=ver_id,
-                document_id=doc_id,
-                version_number=1,
-                content=req.content,
-                summary="Initial version",
-                source="user",
-            )
-            db.add(doc)
-            db.add(ver)
-            db.commit()
-            db.refresh(doc)
-            try:
-                from src.event_bus import fire_event
-                fire_event("document_created", doc.owner)
-            except Exception:
-                logger.debug("document_created event dispatch failed", exc_info=True)
             return _doc_to_dict(doc)
         except HTTPException:
             raise
