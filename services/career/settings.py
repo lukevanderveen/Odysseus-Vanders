@@ -11,6 +11,7 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
+from core.atomic_io import atomic_write_json
 from core.constants import DATA_DIR
 from src.upload_handler import secure_filename
 
@@ -77,6 +78,5 @@ def save_career_settings(owner: Optional[str], updates: Dict[str, Any]) -> Dict[
             current[key] = _coerce(key, value)
     path = settings_path(owner)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    from core.atomic_io import atomic_write_json
     atomic_write_json(path, current, indent=2)
     return current

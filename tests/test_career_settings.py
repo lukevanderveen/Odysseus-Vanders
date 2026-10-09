@@ -1,10 +1,19 @@
 """Per-owner Career hub settings file (plan 00)."""
 import json
 import os
+import sys
 
 import pytest
 
-from services.career import settings as cs
+# Other test modules stub core.atomic_io at collection time with a fake that
+# writes "{}"; evict file-less stubs so settings binds the real atomic writer.
+for _name in ("core.atomic_io", "services.career.settings"):
+    _mod = sys.modules.get(_name)
+    if _mod is not None and not getattr(_mod, "__file__", None):
+        sys.modules.pop(_name, None)
+        sys.modules.pop("services.career.settings", None)
+
+from services.career import settings as cs  # noqa: E402
 
 
 @pytest.fixture()

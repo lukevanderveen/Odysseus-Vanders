@@ -30,6 +30,12 @@ def _import_real(*names, force=()):
         sys.modules.update(saved)
 
 
+_atomic = sys.modules.get("core.atomic_io")
+if _atomic is not None and not getattr(_atomic, "__file__", None):
+    # A collection-time stub (writes "{}") would make settings saves vanish.
+    sys.modules.pop("core.atomic_io", None)
+    sys.modules.pop("services.career.settings", None)
+
 _sa, _sa_orm, _sa_pool, _coredb, crr, helpers, cs = _import_real(
     "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.pool", "core.database",
     "routes.career_routes", "routes.career_helpers", "services.career.settings",
