@@ -35119,6 +35119,10 @@ body.theme-frosted .modal {
 .career-claim { display: flex; flex-direction: column; font-size: 12px; padding: 6px 8px; border-left: 3px solid #5dbf6e; }
 .career-rubric { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
 .career-rubric-warning { color: #d9a13b; }
+/* Reviewer panel (plan 02) */
+.career-panel-summary { max-height: 480px; }
+.career-detail .projects-grid { padding-top: 4px; }
+.career-detail .proj-summary-body { max-height: 260px; }
 
 /* ── Office view (Agent Council Phase 4) ──────────────────────────────── */
 .office-canvas {

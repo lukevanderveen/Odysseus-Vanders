@@ -9,6 +9,8 @@ import { placeholderHtml, TABS } from './careerLogic.js';
 import { addFormHtml, detailHtml, listHtml } from './careerApplications.js';
 import { readSettingsForm, setupHtml } from './careerSetup.js';
 import { installCoverLetter } from './careerCoverLetter.js';
+import { installReviewers } from './careerReviewers.js';
+import { installReview } from './careerReview.js';
 
 const _tabRenderers = {};
 const _clickHandlers = [];
@@ -234,5 +236,7 @@ const careerApi = { open, close, isOpen, refresh, render, registerTab, onPanelCl
 // calls api.registerTab / api.onPanelClick and may import `detailSections`
 // from careerApplications.js; it must not fetch or render at load.
 installCoverLetter(careerApi);
+installReviewers(careerApi);
+installReview(careerApi);
 
 export default careerApi;
