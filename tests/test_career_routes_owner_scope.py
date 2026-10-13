@@ -140,3 +140,57 @@ def test_settings_roundtrip(env):
     res = client.put("/api/career/settings", json={"voice_rules": "plain", "bogus": 1})
     assert res.json()["voice_rules"] == "plain" and "bogus" not in res.json()
     assert client.get("/api/career/settings").json()["voice_rules"] == "plain"
+
+
+def test_update_saves_jd_company_url_and_context(env):
+    client, _, _ = env
+    res = client.put("/api/career/applications/a1", json={
+        "jd_text": "Python, FastAPI", "company_url": "https://acme.example",
+        "company_context": "Ships Rocket, an LLM gateway."})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["jd_text"] == "Python, FastAPI"
+    assert body["company_url"] == "https://acme.example"
+    assert body["company_context"] == "Ships Rocket, an LLM gateway."
+
+
+def test_fetch_jd_saves_page_text_and_posting_url(env, monkeypatch):
+    client, _, _ = env
+    monkeypatch.setattr(crr, "fetch_webpage_content", lambda url, timeout=5: {"content": f"JD from {url}"})
+    res = client.post("/api/career/applications/a1/fetch-jd", json={"url": "https://jobs.example/9"})
+    assert res.status_code == 200
+    assert res.json()["jd_text"] == "JD from https://jobs.example/9"
+    assert res.json()["url"] == "https://jobs.example/9"
+
+
+def test_fetch_jd_with_empty_page_is_502_and_keeps_existing_text(env, monkeypatch):
+    client, TestSession, _ = env
+    monkeypatch.setattr(crr, "fetch_webpage_content", lambda url, timeout=5: {"content": ""})
+    res = client.post("/api/career/applications/a1/fetch-jd", json={"url": "https://jobs.example/9"})
+    assert res.status_code == 502
+    db = TestSession()
+    assert db.get(JobApplication, "a1").url is None
+    db.close()
+
+
+def test_fetch_jd_without_any_url_is_400(env):
+    client, _, _ = env
+    assert client.post("/api/career/applications/a1/fetch-jd", json={}).status_code == 400
+
+
+def test_scan_company_saves_truncated_site_text(env, monkeypatch):
+    client, _, _ = env
+    monkeypatch.setattr(crr, "fetch_webpage_content", lambda url, timeout=5: {"content": "Rocket " * 5000})
+    res = client.post("/api/career/applications/a1/scan-company", json={"url": "https://acme.example"})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["company_url"] == "https://acme.example"
+    assert body["company_context"].startswith("Rocket")
+    assert len(body["company_context"]) <= crr.COMPANY_CONTEXT_CHARS
+
+
+def test_fetch_routes_are_owner_scoped(env, monkeypatch):
+    client, _, _ = env
+    monkeypatch.setattr(crr, "fetch_webpage_content", lambda url, timeout=5: {"content": "x"})
+    assert client.post("/api/career/applications/a2/fetch-jd", json={"url": "https://x"}).status_code == 404
+    assert client.post("/api/career/applications/a2/scan-company", json={"url": "https://x"}).status_code == 404

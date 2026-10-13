@@ -1436,6 +1436,8 @@ class JobApplication(TimestampMixin, Base):
     source  = Column(String, default="manual")     # manual | email | linkedin | board
     url     = Column(String, nullable=True)
     jd_text = Column(Text, nullable=True)
+    company_url     = Column(String, nullable=True)   # company site scanned for projects to mention
+    company_context = Column(Text, nullable=True)     # editable text pulled from company_url
 
     applied_at    = Column(DateTime, nullable=True)
     status        = Column(String, default="drafting")
@@ -1669,6 +1671,7 @@ def init_db():
     _migrate_add_crew_member_id()
     _migrate_add_assistant_columns()
     _migrate_add_crew_department()
+    _migrate_add_job_application_company_cols()
     _migrate_add_email_smtp_security()
     _migrate_seed_email_account()
     _migrate_add_calendar_metadata()
@@ -1693,6 +1696,19 @@ def _migrate_add_crew_department(engine_=None):
                 logging.getLogger(__name__).info("Added department column to crew_members")
     except Exception as e:
         logging.getLogger(__name__).warning(f"crew department migration: {e}")
+
+
+def _migrate_add_job_application_company_cols(engine_=None):
+    """Add company_url / company_context to job_applications if missing."""
+    try:
+        with (engine_ or engine).connect() as conn:
+            cols = [r[1] for r in conn.execute(text("PRAGMA table_info(job_applications)"))]
+            for col, typ in (("company_url", "TEXT"), ("company_context", "TEXT")):
+                if cols and col not in cols:
+                    conn.execute(text(f"ALTER TABLE job_applications ADD COLUMN {col} {typ}"))
+            conn.commit()
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"job_applications company columns migration: {e}")
 
 
 def _migrate_add_email_smtp_security():

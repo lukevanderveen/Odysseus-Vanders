@@ -74,3 +74,23 @@ def test_career_module_sources_parse(node_available):
     for f in ("career.js", "careerLogic.js", "careerApplications.js", "careerSetup.js"):
         res = subprocess.run(["node", "--check", f"static/js/{f}"], cwd=_REPO, capture_output=True, encoding="utf-8")
         assert res.returncode == 0, res.stderr
+
+
+def test_job_details_form_is_editable_and_escaped(node_available):
+    out = _run_node(textwrap.dedent("""
+        const { jobDetailsHtml } = await import('./static/js/careerJobDetailsLogic.js');
+        const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const empty = jobDetailsHtml({ id: 'a1', url: null, jd_text: null }, false, esc);
+        const filled = jobDetailsHtml({ id: 'a1', url: 'https://j.example/1', jd_text: 'Need <Go>',
+          company_url: 'https://acme.example', company_context: 'Rocket' }, true, esc);
+        console.log(JSON.stringify({ empty, filled }));
+    """))
+    empty, filled = out["empty"], out["filled"]
+    for el_id in ("career-jd-url", "career-jd-text", "career-jd-fetch", "career-company-url",
+                  "career-company-context", "career-company-scan", "career-jd-save"):
+        assert f'id="{el_id}"' in empty
+    assert "<details" in empty and " open" in empty          # no JD yet: expanded
+    assert " open" not in filled.split(">")[0]               # has JD: collapsed
+    assert "Need &lt;Go>" in filled and "Need <Go>" not in filled
+    assert 'value="https://acme.example"' in filled and "Rocket" in filled
+    assert "disabled" in filled                               # busy fetch disables buttons

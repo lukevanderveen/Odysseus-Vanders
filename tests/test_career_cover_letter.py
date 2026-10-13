@@ -136,3 +136,22 @@ def test_rubric_flags_length_banned_phrases_and_missing_specifics():
 def test_rubric_passes_a_clean_letter():
     letter = "Dear Acme,\n\nI have shipped FastAPI services backed by PostgreSQL for three years.\n\nLuke"
     assert cl.rubric_check(letter, ["FastAPI", "PostgreSQL", "Python"]) == []
+
+
+async def test_draft_includes_company_context_from_their_site():
+    complete = _complete_returning("Dear Acme,\n\nletter")
+    await cl.draft_cover_letter(
+        _app(company_context="Acme ships Rocket, an open-source LLM gateway."), "vanders", complete,
+        FakeEvidence(), requirements={"hard": ["Python"], "nice": []}, settings={})
+    prompt = complete.calls[0][-1]["content"]
+    assert "Acme ships Rocket, an open-source LLM gateway." in prompt
+    assert "{company_context}" not in prompt
+
+
+async def test_draft_without_company_context_marks_it_absent():
+    complete = _complete_returning("Dear Acme,\n\nletter")
+    await cl.draft_cover_letter(_app(), "vanders", complete, FakeEvidence(),
+                                requirements={"hard": ["Python"], "nice": []}, settings={})
+    prompt = complete.calls[0][-1]["content"]
+    assert "{company_context}" not in prompt
+    assert "(none given)" in prompt

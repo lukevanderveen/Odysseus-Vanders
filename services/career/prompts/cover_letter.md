@@ -10,6 +10,9 @@ Must-have requirements from the posting:
 Nice-to-have requirements:
 {nice_requirements}
 
+About the company (text from their website — their products, projects and work):
+{company_context}
+
 Candidate CV evidence (only source of truth for experience — never invent beyond it):
 {cv_evidence}
 
@@ -22,6 +25,8 @@ Voice rules from the candidate:
 Write the letter as markdown with no heading, greeting the company directly. Rules:
 - At most 300 words. Three or four short paragraphs. End with the candidate's sign-off line only.
 - Name at least two specifics from the posting's requirements and tie each to concrete evidence.
+- If the company text names a product or project that genuinely connects to the candidate's evidence,
+  mention one by name and say why it connects. Never invent company facts beyond that text.
 - Lead with the strongest match in the first two sentences; no throat-clearing.
 - Never use: "passionate", "thrilled", "I am writing to apply", "I believe I would be a great fit",
   "fast-paced", "synergy", "leverage".

@@ -5,6 +5,7 @@
 // ============================================
 import uiModule from './ui.js';
 import { applicationBuckets, daysLabel, statusChip, STATUS_LABELS } from './careerLogic.js';
+import { jobDetailsHtml } from './careerJobDetailsLogic.js';
 
 const esc = uiModule.esc;
 
@@ -73,9 +74,8 @@ export const detailHtml = (app, state) => `
     </div>
     <h2 class="cc-title">${esc(app.company)} — ${esc(app.role)}</h2>
     <div class="memory-desc report-scores">${app.url ? `<a href="${esc(app.url)}" target="_blank" rel="noopener">${esc(app.url)}</a>` : 'No posting URL'}</div>
+    ${jobDetailsHtml(app, state.jdBusy, esc)}
     ${detailSections.map((fn) => fn(app, state)).join('')}
-    <details class="proj-summary"><summary>Job description</summary>
-      <div class="proj-summary-body">${esc(app.jd_text || '(none)')}</div></details>
     <label class="assistant-field"><span>Notes</span>
       <textarea id="career-detail-notes" class="settings-input" rows="4">${esc(app.notes || '')}</textarea></label>
     <div class="council-run-form"><button id="career-detail-save-notes" class="memory-toolbar-btn">Save notes</button></div>

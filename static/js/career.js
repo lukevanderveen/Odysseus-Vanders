@@ -8,6 +8,7 @@ import uiModule from './ui.js';
 import { placeholderHtml, TABS } from './careerLogic.js';
 import { addFormHtml, detailHtml, listHtml } from './careerApplications.js';
 import { readSettingsForm, setupHtml } from './careerSetup.js';
+import { readJobDetailsForm } from './careerJobDetailsLogic.js';
 import { installCoverLetter } from './careerCoverLetter.js';
 import { installReviewers } from './careerReviewers.js';
 import { installReview } from './careerReview.js';
@@ -20,7 +21,7 @@ const _clickHandlers = [];
 export const registerTab = (name, render) => { _tabRenderers[name] = render; };
 export const onPanelClick = (handler) => { _clickHandlers.push(handler); };
 
-const state = { tab: 'applications', apps: [], settings: {}, bootstrap: {}, examples: [], view: 'list', openId: null };
+const state = { tab: 'applications', apps: [], settings: {}, bootstrap: {}, examples: [], view: 'list', openId: null, jdBusy: false };
 export const getState = () => state;
 
 const _modal = () => document.getElementById('career-modal');
@@ -106,6 +107,31 @@ const _updateApplication = async (id, patch) => {
   }
 };
 
+const _saveJobDetails = async () => {
+  await _updateApplication(state.openId, readJobDetailsForm(document));
+  uiModule.showToast('Job details saved');
+};
+
+// Fetch a page into the open application: 'fetch-jd' (posting) or 'scan-company' (company site).
+const _fetchPage = async (route, inputId, done) => {
+  const url = document.getElementById(inputId)?.value.trim() || '';
+  if (!url) return uiModule.showError('Enter a URL first');
+  state.jdBusy = true;
+  render();
+  try {
+    // Persist unsaved edits first so the re-render doesn't wipe them.
+    await _json(`/api/career/applications/${state.openId}`, { method: 'PUT', body: JSON.stringify(readJobDetailsForm(document)) });
+    await _json(`/api/career/applications/${state.openId}/${route}`, { method: 'POST', body: JSON.stringify({ url }) });
+    await _fetchAll();
+    uiModule.showToast(done);
+  } catch (e) {
+    uiModule.showError(`Fetch: ${e.message}`);
+  } finally {
+    state.jdBusy = false;
+    render();
+  }
+};
+
 const _archiveApplication = async (id) => {
   if (!(await uiModule.styledConfirm('Archive this application?'))) return;
   try {
@@ -179,6 +205,9 @@ const _idActions = {
   'career-settings-save': _saveSettings,
   'career-cv-upload': _uploadCv,
   'career-ex-save': _addExample,
+  'career-jd-save': _saveJobDetails,
+  'career-jd-fetch': () => _fetchPage('fetch-jd', 'career-jd-url', 'Job description fetched'),
+  'career-company-scan': () => _fetchPage('scan-company', 'career-company-url', 'Company site scanned'),
   'career-detail-save-notes': () => _updateApplication(
     state.openId, { notes: document.getElementById('career-detail-notes')?.value || '' }),
 };

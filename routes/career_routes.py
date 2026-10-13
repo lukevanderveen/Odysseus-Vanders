@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
 
 from core.database import CrewMember, JobApplication, SessionLocal
@@ -23,6 +23,8 @@ from src.auth_helpers import get_current_user
 from src.search.content import fetch_webpage_content
 
 logger = logging.getLogger(__name__)
+
+COMPANY_CONTEXT_CHARS = 6000   # keeps the cover-letter prompt small; user can edit it down
 
 
 class ApplicationCreate(BaseModel):
@@ -55,6 +57,8 @@ class ApplicationUpdate(BaseModel):
     role: Optional[str] = None
     url: Optional[str] = None
     jd_text: Optional[str] = None
+    company_url: Optional[str] = None
+    company_context: Optional[str] = None
     applied_at: Optional[datetime] = None
     status: Optional[str] = None
     notes: Optional[str] = None
@@ -66,6 +70,10 @@ class ApplicationUpdate(BaseModel):
         if v is not None and v not in APPLICATION_STATUSES:
             raise ValueError(f"status must be one of {APPLICATION_STATUSES}")
         return v
+
+
+class PageFetch(BaseModel):
+    url: Optional[str] = None
 
 
 async def _jd_from_url(url: str) -> str:
@@ -174,7 +182,8 @@ def setup_career_routes(skills_manager, rag_manager) -> APIRouter:
         db = SessionLocal()
         try:
             app = get_owned_application(db, aid, user)
-            for field in ("company", "role", "url", "jd_text", "applied_at", "status", "notes", "archived"):
+            for field in ("company", "role", "url", "jd_text", "company_url", "company_context",
+                          "applied_at", "status", "notes", "archived"):
                 val = getattr(body, field)
                 if val is None:
                     continue
@@ -186,6 +195,35 @@ def setup_career_routes(skills_manager, rag_manager) -> APIRouter:
             return application_to_dict(app, load_career_settings(user))
         finally:
             db.close()
+
+    async def _fetch_into(aid: str, request: Request, body: PageFetch,
+                          url_field: str, text_field: str, limit: Optional[int] = None):
+        """Fetch a page and store its text on the application; nothing changes on failure."""
+        user = _owner(request)
+        db = SessionLocal()
+        try:
+            app = get_owned_application(db, aid, user)
+            url = (body.url or "").strip() or getattr(app, url_field)
+            if not url:
+                raise HTTPException(400, "Give a URL to fetch")
+            page = (await _jd_from_url(url)).strip()
+            if not page:
+                raise HTTPException(502, "Couldn't read any text from that page — paste it instead.")
+            setattr(app, url_field, url)
+            setattr(app, text_field, page[:limit] if limit else page)
+            db.commit()
+            db.refresh(app)
+            return application_to_dict(app, load_career_settings(user))
+        finally:
+            db.close()
+
+    @router.post("/applications/{aid}/fetch-jd")
+    async def fetch_jd(aid: str, body: PageFetch, request: Request):
+        return await _fetch_into(aid, request, body, "url", "jd_text")
+
+    @router.post("/applications/{aid}/scan-company")
+    async def scan_company(aid: str, body: PageFetch, request: Request):
+        return await _fetch_into(aid, request, body, "company_url", "company_context", COMPANY_CONTEXT_CHARS)
 
     @router.delete("/applications/{aid}")
     def archive_application(aid: str, request: Request):

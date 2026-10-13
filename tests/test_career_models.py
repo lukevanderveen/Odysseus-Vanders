@@ -85,3 +85,26 @@ def test_review_and_post_defaults(db_factory):
     assert post.status == "draft"
     assert post.window_days == 14
     db.close()
+
+
+def test_job_application_stores_company_site_and_context(db_factory):
+    db = db_factory()
+    db.add(JobApplication(id="c1", owner="vanders", company="Acme", role="Dev",
+                          company_url="https://acme.example", company_context="Builds Rocket, an LLM gateway."))
+    db.commit()
+    row = db.get(JobApplication, "c1")
+    assert row.company_url == "https://acme.example"
+    assert row.company_context == "Builds Rocket, an LLM gateway."
+    db.close()
+
+
+def test_migrate_adds_company_columns_to_existing_table():
+    engine = _sa.create_engine("sqlite://", poolclass=_sa_pool.StaticPool)
+    with engine.connect() as conn:
+        conn.execute(_sa.text("CREATE TABLE job_applications (id TEXT PRIMARY KEY, company TEXT, role TEXT)"))
+        conn.commit()
+    _coredb._migrate_add_job_application_company_cols(engine_=engine)
+    _coredb._migrate_add_job_application_company_cols(engine_=engine)  # idempotent
+    with engine.connect() as conn:
+        cols = [r[1] for r in conn.execute(_sa.text("PRAGMA table_info(job_applications)"))]
+    assert "company_url" in cols and "company_context" in cols
