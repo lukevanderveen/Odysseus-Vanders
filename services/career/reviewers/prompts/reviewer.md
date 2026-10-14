@@ -9,7 +9,7 @@ One line: advance, maybe, or reject — then one sentence on why.
 A numbered list. Each issue quotes the exact phrase from the cover letter it concerns.
 
 ## Line edits
-At most five pairs in the form `replace: "<original>" → with: "<rewrite>"`. Rewrites must stay true to the CV excerpt; do not invent experience.
+At most five pairs in the form `replace: "<original>" → with: "<rewrite>"`. Rewrites must stay true to the CV; do not invent experience. Never put a placeholder such as "[degree]" or "[X%]" in a rewrite, and never use a number, title or qualification the CV does not state. If you want a figure the CV lacks, say so under "What would make me say yes" ("add a real figure for X if you have one") instead of writing one in.
 
 ## What would make me say yes
 Two or three sentences naming the single most valuable addition or cut.
@@ -20,7 +20,7 @@ Then output exactly one fenced json block and nothing after it. Use integers 0-1
 {dims_json_example}
 ```
 
-Ground every point in the job description, the cover letter, or the CV excerpt. If the CV excerpt is missing or does not cover a claim, say "unverified" for that claim instead of guessing.
+Ground every point in the job description, the cover letter, or the CV. If the CV is provided but does not cover a claim, say "unverified" for that claim instead of guessing.
 
 ## Job description
 {jd}
@@ -28,5 +28,5 @@ Ground every point in the job description, the cover letter, or the CV excerpt. 
 ## Cover letter under review
 {cover_letter}
 
-## CV excerpt (retrieved; may be partial)
+## Candidate CV
 {cv_excerpt}

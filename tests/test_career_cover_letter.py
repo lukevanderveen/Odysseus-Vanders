@@ -30,7 +30,7 @@ class FakeEvidence:
         self._ex = examples if examples is not None else ["# Beta\n\n## Cover letter\n\nDear Beta, short and plain."]
         self.queries = []
 
-    def cv_chunks(self, query, k=8):
+    def cv_evidence(self, query, k=8):
         self.queries.append(query)
         return self._cv
 

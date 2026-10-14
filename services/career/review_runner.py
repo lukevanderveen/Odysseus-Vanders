@@ -21,6 +21,7 @@ from services.career.review_prompts import (
 from services.career.review_scoring import (
     REVIEW_DIMS, aggregate_panel, parse_panel_verdict, parse_review_block, strip_json_fence,
 )
+from services.career.review_guards import annotate
 from services.career.seeds import seed_reviewers
 
 logger = logging.getLogger(__name__)
@@ -43,8 +44,8 @@ async def _default_complete(messages, owner):
 
 
 def _default_evidence(owner, query, k=8):
-    from services.career.evidence import cv_chunks
-    return cv_chunks(owner, query, k)
+    from services.career.evidence import cv_evidence
+    return cv_evidence(owner, query, k)
 
 
 def _default_notify(**kw):
@@ -105,7 +106,7 @@ async def _run_panel(ctx, complete, owner, session_factory) -> tuple:
         parsed = parse_review_block(raw, member["department"])
         verdicts[member["department"]] = {
             "name": member["name"], "verdict": parsed["verdict"],
-            "body": strip_json_fence(raw), "scores": parsed["scores"],
+            "body": annotate(strip_json_fence(raw), ctx.cv_excerpt), "scores": parsed["scores"],
         }
     panel_raw = await _call(None, build_panel_messages(ctx, verdicts), complete, owner, session_factory)
     scores = aggregate_panel(verdicts)

@@ -13,7 +13,10 @@ from services.career.templates import load_template, render_template
 
 PROMPT_DIR = "reviewers/prompts"
 CV_QUERY_CHARS = 400
-MAX_CHARS = {"jd": 6000, "cover_letter": 6000, "cv_excerpt": 5000}
+MAX_CHARS = {"jd": 6000, "cover_letter": 6000, "cv_excerpt": 12000}
+NO_CV_NOTICE = ("(NO CV PROVIDED — the review tool could not load the candidate's CV. This is a gap in the "
+                "tool, not the candidate's application: do not score CV consistency down for it, and say once "
+                "that the CV was unavailable instead of marking individual claims unverified.)")
 
 
 @dataclass
@@ -56,7 +59,7 @@ def build_context(owner, company, role, jd, cover_letter, cv_chunks: List[str], 
         owner=owner, company=company or "?", role=role or "?",
         jd=_clip(jd, "jd") or "(no job description on file)",
         cover_letter=_clip(cover_letter, "cover_letter"),
-        cv_excerpt=_clip("\n\n".join(c for c in cv_chunks if c), "cv_excerpt") or "(no CV excerpt available)",
+        cv_excerpt=_clip("\n\n".join(c for c in cv_chunks if c), "cv_excerpt") or NO_CV_NOTICE,
         members=list(members),
     )
 

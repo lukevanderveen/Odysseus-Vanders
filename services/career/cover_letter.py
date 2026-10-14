@@ -100,7 +100,7 @@ async def draft_cover_letter(app, owner: Optional[str], complete, evidence,
     if requirements is None:
         requirements = await extract_requirements(app.jd_text or "", complete, owner)
     query = " ".join(requirements.get("hard", []) + requirements.get("nice", [])) or f"{app.role} experience"
-    cv = evidence.cv_chunks(query)
+    cv = evidence.cv_evidence(query)
     if not cv:
         raise NoEvidenceError("No CV text found — upload a CV in Career → Setup first.")
     examples = evidence.example_pairs(app.jd_text or "")

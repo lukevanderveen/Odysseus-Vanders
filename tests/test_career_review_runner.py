@@ -181,3 +181,38 @@ def test_member_candidate_uses_override_model(db_factory, monkeypatch):
     assert prompts.member_candidate(member, "vanders", db_factory) == (
         "http://local/v1/chat/completions", "qwen-big", {"X": "1"})
     assert prompts.member_candidate({"model": "", "endpoint_url": ""}, "vanders", db_factory) is None
+
+
+def test_default_evidence_uses_full_cv(monkeypatch):
+    import services.career.evidence as ev
+    seen = []
+    monkeypatch.setattr(ev, "cv_evidence", lambda owner, query, k=8: seen.append((owner, k)) or ["whole CV"])
+    assert runner._default_evidence("vanders", "Dev at Acme", 8) == ["whole CV"]
+    assert seen == [("vanders", 8)]
+
+
+def test_build_context_keeps_a_full_length_cv():
+    cv = "x" * 11000
+    ctx = prompts.build_context("vanders", "Acme", "Dev", "jd", "letter", [cv], [])
+    assert ctx.cv_excerpt == cv
+
+
+def test_build_context_flags_a_missing_cv_as_a_tool_gap():
+    ctx = prompts.build_context("vanders", "Acme", "Dev", "jd", "letter", [], [])
+    assert "NO CV PROVIDED" in ctx.cv_excerpt
+    assert "not the candidate's" in ctx.cv_excerpt
+
+
+async def test_reviewer_edits_with_placeholders_are_flagged_in_the_stored_body(db_factory):
+    async def complete(messages):
+        if messages[0]["role"] == "system":
+            dept = next(d for d, name in seeds.REVIEWER_NAMES.items() if name in messages[-1]["content"])
+            return ('## Line edits\nreplace: "I built" → with: "I hold a [degree] and built"\n\n'
+                    + _review_output(dept))
+        return PANEL_OUTPUT
+    await runner.run_review("rv1", complete=complete, session_factory=db_factory,
+                            evidence=fake_evidence, notify=lambda **kw: None)
+    db = db_factory()
+    body = json.loads(db.get(ApplicationReview, "rv1").verdicts)["career_hr"]["body"]
+    db.close()
+    assert "## Tool checks" in body and "[degree]" in body
