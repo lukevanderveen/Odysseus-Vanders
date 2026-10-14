@@ -57,3 +57,21 @@ def test_banned_phrases_is_a_string_list(data_dir):
     out = cs.save_career_settings("vanders", {"banned_phrases": ["dive deep", 3]})
     assert out["banned_phrases"] == ["dive deep", "3"]
     assert cs.save_career_settings("vanders", {"banned_phrases": "nope"})["banned_phrases"] == []
+
+
+def test_profile_defaults_to_every_field_blank(data_dir):
+    profile = cs.load_career_settings("vanders")["profile"]
+    assert profile == {k: "" for k in cs.PROFILE_FIELDS}
+    assert {"home_location", "right_to_work", "travel", "notice_period", "availability", "links"} <= set(profile)
+
+
+def test_profile_keeps_known_fields_as_trimmed_strings(data_dir):
+    out = cs.save_career_settings("vanders", {"profile": {"home_location": " Kingston upon Thames ",
+                                                          "notice_period": 0, "bogus": "x"}})
+    assert out["profile"]["home_location"] == "Kingston upon Thames"
+    assert out["profile"]["notice_period"] == "0"
+    assert "bogus" not in out["profile"] and out["profile"]["travel"] == ""
+
+
+def test_profile_that_is_not_a_dict_resets_to_blank(data_dir):
+    assert cs.save_career_settings("vanders", {"profile": "Kingston"})["profile"] == {k: "" for k in cs.PROFILE_FIELDS}

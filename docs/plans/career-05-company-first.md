@@ -77,12 +77,30 @@ Original plan:
   mirror `static/js/careerReviewLogic.js` (`test_career_review_js.py` guards the sync).
 - Chair splits "Consolidated edits" into "Apply now" and "Needs your input".
 
-### 05c — Candidate profile / logistics
+### 05c — Candidate profile / logistics — DONE 2026-10-14
+Built: `settings.PROFILE_FIELDS` / `profile` (coerced to trimmed strings, back-filled on load),
+`cover_letter.profile_lines` → `{profile}` in `cover_letter.md` (only filled fields; empty profile
+tells the writer not to state logistics), "About you" section in `careerSetup.js`.
+Follow-up: give reviewers the profile too, so HR checks the letter against it instead of
+asking for logistics the candidate already supplied.
+
+Original plan:
 - Add `profile` to `services/career/settings.py` DEFAULTS: `home_location`, `right_to_work`,
   `travel`, `notice_period`, `availability`, `links`. Coerce as a dict of strings.
 - Setup UI fields in `static/js/careerSetup.js`; feed into the draft prompt for paragraph 5.
 
-### 05d — CV exclusion
+### 05d — CV exclusion — DONE 2026-10-14
+Built: `services/career/cv_overlap.py` (CV units, shared 6-word runs via longest common run,
+cosine via injected embedder, owner-level cache keyed on CV text), `cv_overlap` check in
+`letter_checks` (skipped when flags are None), wired into the draft and baseline routes via
+`asyncio.to_thread`. `letter_checks.body_paragraphs` now strips sign-off and signature lines.
+Calibration (all-MiniLM-L6-v2, 3 letters): restatements 0.83–0.87, new angles on the same
+projects 0.57–0.71, company sentences ≤ 0.52 → threshold **0.75** (the spec's 0.85 would miss
+both real restatements). Only *credentials* sentences in paragraph 1 are exempt; the worst real
+restatement (Mytos) was in the opening. Open: reused CV figures ("10,000 assets at 60 FPS") are
+flagged as copied runs; decide whether metrics should be exempt.
+
+Original plan:
 - `services/career/cv_overlap.py`: split `full_cv_text` into bullets/sentences, embed once per CV
   (cache keyed on CV filename + mtime), `overlaps(sentence) -> (max_sim, bullet, shared_6gram)`.
 - Pure 6-gram check is testable without embeddings; inject the embedder for the cosine part.

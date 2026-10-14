@@ -140,3 +140,21 @@ async def test_draft_without_company_context_marks_it_absent():
     prompt = complete.calls[0][-1]["content"]
     assert "{company_context}" not in prompt
     assert "(none given)" in prompt
+
+
+async def test_draft_gives_the_writer_the_candidates_logistics():
+    complete = _complete_returning("Dear Acme,\n\nletter")
+    await cl.draft_cover_letter(_app(), "vanders", complete, FakeEvidence(),
+                                requirements={"hard": ["Python"], "nice": []},
+                                settings={"profile": {"home_location": "Kingston upon Thames",
+                                                      "right_to_work": "Yes, UK citizen", "travel": ""}})
+    prompt = complete.calls[0][-1]["content"]
+    assert "Based in: Kingston upon Thames" in prompt and "Right to work: Yes, UK citizen" in prompt
+    assert "Travel:" not in prompt and "{profile}" not in prompt
+
+
+async def test_draft_without_logistics_tells_the_writer_not_to_invent_them():
+    complete = _complete_returning("Dear Acme,\n\nletter")
+    await cl.draft_cover_letter(_app(), "vanders", complete, FakeEvidence(),
+                                requirements={"hard": ["Python"], "nice": []}, settings={})
+    assert "do not state location, right to work or availability" in complete.calls[0][-1]["content"]

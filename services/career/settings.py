@@ -17,8 +17,12 @@ from src.upload_handler import secure_filename
 
 logger = logging.getLogger(__name__)
 
+# Candidate logistics stated in a letter's closing paragraph.
+PROFILE_FIELDS = ("home_location", "right_to_work", "travel", "notice_period", "availability", "links")
+
 DEFAULTS: Dict[str, Any] = {
     "cv_filename": "",
+    "profile": {k: "" for k in PROFILE_FIELDS},
     "voice_rules": "",
     "banned_phrases": [],                    # added to letter_checks.BANNED_PHRASES
     "target_roles": [],
@@ -52,12 +56,20 @@ def load_career_settings(owner: Optional[str]) -> Dict[str, Any]:
             data = json.load(f)
         if isinstance(data, dict):
             out.update({k: v for k, v in data.items() if k in DEFAULTS})
+            out["profile"] = _profile(out["profile"])   # fills fields added after the file was written
     except Exception:
         logger.warning("career settings unreadable at %s; using defaults", path, exc_info=True)
     return out
 
 
+def _profile(value: Any) -> Dict[str, str]:
+    value = value if isinstance(value, dict) else {}
+    return {k: str(value.get(k) if value.get(k) is not None else "").strip() for k in PROFILE_FIELDS}
+
+
 def _coerce(key: str, value: Any) -> Any:
+    if key == "profile":
+        return _profile(value)
     if key in _INT_FIELDS:
         try:
             return max(1, int(value))

@@ -88,6 +88,19 @@ def _bullets(items: List[str]) -> str:
     return "\n".join(f"- {i}" for i in items) or "- (none listed)"
 
 
+PROFILE_LABELS = {
+    "home_location": "Based in", "right_to_work": "Right to work", "travel": "Travel",
+    "notice_period": "Notice period", "availability": "Availability", "links": "Links",
+}
+
+
+def profile_lines(profile: Optional[Dict[str, Any]]) -> str:
+    """Only the fields the candidate filled in, so the writer can't pad the rest."""
+    lines = [f"- {label}: {str((profile or {}).get(key) or '').strip()}"
+             for key, label in PROFILE_LABELS.items() if str((profile or {}).get(key) or "").strip()]
+    return "\n".join(lines) or "(none given — do not state location, right to work or availability)"
+
+
 async def draft_cover_letter(app, owner: Optional[str], complete, evidence,
                              requirements: Optional[Dict[str, List[str]]] = None,
                              settings: Optional[Dict[str, Any]] = None) -> Tuple[str, List[Dict[str, str]]]:
@@ -110,6 +123,7 @@ async def draft_cover_letter(app, owner: Optional[str], complete, evidence,
         "cv_evidence": "\n\n".join(f"- {c}" for c in cv),
         "examples": "\n\n---\n\n".join(examples) or "(none yet)",
         "voice_rules": (settings.get("voice_rules") or "").strip() or "(none given — plain and specific)",
+        "profile": profile_lines(settings.get("profile")),
     })
     raw = await complete([{"role": "user", "content": prompt}], owner)
     return split_claims(raw)

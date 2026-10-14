@@ -23,6 +23,7 @@ from services.career.activity_remote import gather_activity
 from services.career.claims_store import load_claims, save_claims
 from services.career.posts import draft_post
 from services.career.cover_letter import NoEvidenceError, draft_cover_letter, extract_requirements
+from services.career.cv_overlap import flags_for_owner
 from services.career.evidence import Evidence
 from services.career.letter_checks import CheckContext, banned_phrases, run_checks, warnings as check_warnings
 from services.career.llm import complete, complete_utility
@@ -94,7 +95,9 @@ def setup_career_studio_routes(rag_manager) -> APIRouter:
                     requirements=requirements, settings=settings)
             except NoEvidenceError as e:
                 raise HTTPException(409, str(e))
-            warnings = check_warnings(run_checks(markdown, check_context(db, app, requirements)))
+            ctx = check_context(db, app, requirements)
+            ctx.cv_flags = await asyncio.to_thread(flags_for_owner, user, markdown)
+            warnings = check_warnings(run_checks(markdown, ctx))
             doc_id, version = upsert_cover_letter_document(db, app, user, markdown)
             payload = {"doc_id": doc_id, "version": version, "claims": claims,
                        "rubric_warnings": warnings, "requirements": requirements}
@@ -229,5 +232,6 @@ def setup_career_studio_routes(rag_manager) -> APIRouter:
         session_factory=lambda: SessionLocal(),
         check_context=check_context,
         complete=lambda messages, owner=None: complete_utility(messages, owner, max_tokens=TAGGER_MAX_TOKENS),
+        cv_flags=lambda owner, letter: flags_for_owner(owner, letter),
     )
     return router

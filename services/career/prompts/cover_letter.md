@@ -22,6 +22,9 @@ Example letters the candidate wrote before (match their voice, not their content
 Voice rules from the candidate:
 {voice_rules}
 
+Candidate logistics (state only these, in the candidate's words; never add any not listed):
+{profile}
+
 Write the letter as markdown with no heading, greeting the company directly. Rules:
 - 250 to 400 words. Four or five short paragraphs. End with the candidate's sign-off line only.
 - Name at least two specifics from the posting's requirements and tie each to concrete evidence.
@@ -29,8 +32,8 @@ Write the letter as markdown with no heading, greeting the company directly. Rul
   mention one by name and say why it connects. Never invent company facts beyond that text.
 - Lead with the strongest match in the first two sentences; no throat-clearing.
 - Name the company and the role in the first paragraph after the greeting. Name no other company.
-- If the posting mentions location, hybrid working or travel, say where the candidate is based and
-  that they can travel.
+- Close with the logistics the posting makes relevant (location, hybrid working, travel, start date),
+  taken from the candidate logistics above, just before the sign-off. Add the links after the name.
 - UK spelling. No em dashes and no exclamation marks.
 - Never use: "passionate", "thrilled", "I am writing to apply", "I believe I would be a great fit",
   "fast-paced", "synergy", "leverage".

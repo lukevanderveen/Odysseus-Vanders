@@ -5,6 +5,24 @@ import uiModule from './ui.js';
 
 const esc = uiModule.esc;
 
+// Mirror of services/career/settings.py PROFILE_FIELDS.
+const PROFILE_FIELDS = [
+  ['home_location', 'Where you are based', 'Kingston upon Thames, London'],
+  ['right_to_work', 'Right to work', 'UK citizen, no sponsorship needed'],
+  ['travel', 'Travel', 'Happy to travel to client sites'],
+  ['notice_period', 'Notice period', 'Available immediately'],
+  ['availability', 'Availability', 'Full time, hybrid or on-site'],
+  ['links', 'Links for the sign-off', 'github.com/you'],
+];
+
+const profileHtml = (profile) => PROFILE_FIELDS.map(([key, label, hint]) => `
+      <label class="assistant-field"><span>${esc(label)}</span>
+        <input id="career-profile-${key}" class="settings-input" type="text" placeholder="${esc(hint)}"
+               value="${esc((profile || {})[key] || '')}"></label>`).join('');
+
+const readProfile = () => Object.fromEntries(PROFILE_FIELDS.map(([key]) =>
+  [key, (document.getElementById(`career-profile-${key}`)?.value || '').trim()]));
+
 export const setupHtml = (state) => {
   const s = state.settings || {};
   const examples = (state.examples || []).map((e) => `
@@ -30,6 +48,10 @@ export const setupHtml = (state) => {
         <input id="career-roles" class="settings-input" type="text" value="${esc((s.target_roles || []).join(', '))}"></label>
       <label class="assistant-field"><span>Locations (comma separated)</span>
         <input id="career-locations" class="settings-input" type="text" value="${esc((s.locations || []).join(', '))}"></label>
+
+      <h3 class="cc-section">About you (stated in a letter's closing paragraph)</h3>
+      <p class="memory-desc">Leave a field blank and letters won't mention it.</p>
+      ${profileHtml(s.profile)}
 
       <h3 class="cc-section">Tracker timing</h3>
       <div class="assistant-field-row">
@@ -59,6 +81,7 @@ const _csv = (id) => (document.getElementById(id)?.value || '').split(',').map((
 export const readSettingsForm = () => ({
   voice_rules: document.getElementById('career-voice')?.value || '',
   banned_phrases: _csv('career-banned'),
+  profile: readProfile(),
   target_roles: _csv('career-roles'),
   locations: _csv('career-locations'),
   nudge_after_days: Number(document.getElementById('career-nudge')?.value || 10),

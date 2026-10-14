@@ -17,6 +17,8 @@ _US_SPELLING_RE = re.compile(
     r"\b(?:(?:optimiz|organiz|analyz|realiz|recogniz|prioritiz|utiliz|customiz|minimiz|maximiz)\w*"
     r"|colors?|behaviors?|favorites?|centers?)\b", re.I)
 _GREETING_RE = re.compile(r"^(?:dear|hi|hello)\b", re.I)
+_SIGN_OFF_RE = re.compile(r"^(?:kind regards|best regards|regards|best wishes|best|many thanks|thanks|"
+                          r"thank you|sincerely|yours)\b", re.I)
 _JD_LOGISTICS_RE = re.compile(r"hybrid|on-?site|in the office|travel|relocat|location|based in|commut", re.I)
 _LETTER_LOGISTICS_RE = re.compile(r"based|located|location|relocat|travel|commut|right to work|on-?site|hybrid", re.I)
 
@@ -51,6 +53,7 @@ class CheckContext:
     hard_requirements: Sequence[str] = ()
     other_companies: Sequence[str] = ()
     banned_phrases: Sequence[str] = field(default_factory=lambda: list(BANNED_PHRASES))
+    cv_flags: Optional[List[Dict[str, Any]]] = None   # from cv_overlap; None = check not run
 
 
 @dataclass
@@ -64,13 +67,27 @@ def paragraphs(letter: str) -> List[str]:
     return [p.strip() for p in re.split(r"\n\s*\n", letter or "") if p.strip()]
 
 
+def _is_closing(para: str) -> bool:
+    """Sign-off ("Kind regards, Luke") or a bare signature line (name, link)."""
+    words = len(para.split())
+    if _SIGN_OFF_RE.match(para) and words <= 12:
+        return True
+    return words <= 8 and not para.rstrip().endswith((".", "!", "?"))
+
+
+def body_paragraphs(letter: str) -> List[str]:
+    """Paragraphs without a short leading greeting or the trailing sign-off block."""
+    paras = paragraphs(letter)
+    if paras and _GREETING_RE.match(paras[0]) and len(paras[0].split()) <= 12:
+        paras = paras[1:]
+    while paras and _is_closing(paras[-1]):
+        paras = paras[:-1]
+    return paras
+
+
 def opening_paragraph(letter: str) -> str:
-    """First paragraph that isn't a short greeting line."""
-    for p in paragraphs(letter):
-        if _GREETING_RE.match(p) and len(p.split()) <= 12:
-            continue
-        return p
-    return ""
+    body = body_paragraphs(letter)
+    return body[0] if body else ""
 
 
 def _length(letter: str, ctx: CheckContext) -> CheckResult:
@@ -147,11 +164,28 @@ def _specifics(letter: str, ctx: CheckContext) -> CheckResult:
     return CheckResult("specifics", False, f"Name at least two posting specifics; not mentioned: {missing}.")
 
 
-CHECKS: List[Callable[[str, CheckContext], CheckResult]] = [_length, _voice, _names, _logistics, _specifics]
+def _flag_text(f: Dict[str, Any]) -> str:
+    if f.get("reason") == "copied":
+        return f'paragraph {f["paragraph"]} copies "{f.get("shared")}": "{f["sentence"]}"'
+    return f'paragraph {f["paragraph"]}: "{f["sentence"]}" (close to "{f["bullet"]}")'
+
+
+def _cv_overlap(letter: str, ctx: CheckContext) -> Optional[CheckResult]:
+    if ctx.cv_flags is None:
+        return None
+    if not ctx.cv_flags:
+        return CheckResult("cv_overlap", True)
+    return CheckResult("cv_overlap", False,
+                       "These sentences restate your CV; reframe them toward what the CV doesn't say: "
+                       + "; ".join(_flag_text(f) for f in ctx.cv_flags) + ".")
+
+
+CHECKS: List[Callable[[str, CheckContext], Optional[CheckResult]]] = [
+    _length, _voice, _names, _logistics, _specifics, _cv_overlap]
 
 
 def run_checks(letter: str, ctx: CheckContext) -> List[CheckResult]:
-    return [check(letter or "", ctx) for check in CHECKS]
+    return [r for r in (check(letter or "", ctx) for check in CHECKS) if r is not None]
 
 
 def warnings(results: List[CheckResult]) -> List[str]:

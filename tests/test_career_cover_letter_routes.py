@@ -254,3 +254,30 @@ def test_draft_checks_use_the_owners_banned_phrases(env, monkeypatch):
     monkeypatch.setattr(sr, "complete", fake_complete)
     warnings = client.post("/api/career/applications/a1/cover-letter").json()["rubric_warnings"]
     assert any(w.startswith("Voice:") and "dive deep" in w for w in warnings)
+
+
+def test_draft_warns_about_sentences_that_restate_the_cv(env, monkeypatch):
+    client, _, _ = env
+    seen = []
+
+    def fake_flags(owner, letter):
+        seen.append(owner)
+        return [{"paragraph": 1, "sentence": "I built FastAPI services backed by PostgreSQL.", "bullet": "b",
+                 "reason": "similar", "shared": None, "similarity": 0.9}]
+    monkeypatch.setattr(sr, "flags_for_owner", fake_flags)
+    warnings = client.post("/api/career/applications/a1/cover-letter").json()["rubric_warnings"]
+    assert seen == ["vanders"] and any("restate your CV" in w for w in warnings)
+
+
+def test_baseline_includes_the_cv_overlap_check(env, monkeypatch, tmp_path):
+    import services.career.letter_baseline as lb
+    client, TestSession, _ = env
+    monkeypatch.setattr(lb, "DATA_DIR", str(tmp_path))
+    _seed_letters(TestSession)
+
+    async def fake_utility(messages, owner=None, max_tokens=800):
+        return "{}"
+    monkeypatch.setattr(sr, "complete_utility", fake_utility)
+    monkeypatch.setattr(sr, "flags_for_owner", lambda owner, letter: [])
+    rows = client.post("/api/career/letters/baseline").json()["letters"]
+    assert rows and all(any(c["name"] == "cv_overlap" for c in r["checks"]) for r in rows)

@@ -119,3 +119,31 @@ def test_banned_phrases_merge_defaults_with_the_owners_without_duplicates():
 
 def test_banned_phrases_without_settings_are_the_defaults():
     assert lc.banned_phrases(None) == list(lc.BANNED_PHRASES)
+
+
+def test_body_paragraphs_drop_greeting_sign_off_and_signature_lines():
+    letter = ("Dear Acme,\n\nFirst point.\n\nSecond point.\n\nBest regards,\n\nLuke Van Der Veen\n\n"
+              "https://github.com/lukevanderveen")
+    assert lc.body_paragraphs(letter) == ["First point.", "Second point."]
+
+
+def test_body_paragraphs_keep_a_short_final_sentence():
+    assert lc.body_paragraphs("Dear Acme,\n\nFirst point.\n\nI'd welcome a chat.") == ["First point.", "I'd welcome a chat."]
+
+
+def test_cv_overlap_check_is_skipped_without_flags():
+    assert "cv_overlap" not in {r.name for r in lc.run_checks(_letter(), _ctx())}
+
+
+def test_cv_overlap_check_passes_with_no_flags():
+    assert {r.name: r.ok for r in lc.run_checks(_letter(), _ctx(cv_flags=[]))}["cv_overlap"]
+
+
+def test_cv_overlap_check_names_each_restated_sentence():
+    flags = [{"paragraph": 2, "sentence": "I fixed an auth bypass.", "bullet": "Found and fixed an auth bypass.",
+              "reason": "similar", "shared": None, "similarity": 0.81},
+             {"paragraph": 3, "sentence": "I'm a motivated graduate.", "bullet": "I'm a motivated graduate (2:1).",
+              "reason": "copied", "shared": "i'm a motivated graduate", "similarity": None}]
+    detail = _failed(_letter(), _ctx(cv_flags=flags))["cv_overlap"]
+    assert "paragraph 2" in detail and "I fixed an auth bypass." in detail
+    assert "paragraph 3" in detail and "copies" in detail and "reframe" in detail.lower()

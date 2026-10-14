@@ -5,6 +5,7 @@ which passes its collaborators as callables so tests patch one module.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
@@ -35,7 +36,7 @@ def _recent_letters(db, owner: Optional[str], limit: int, check_context: Callabl
 
 def register_letter_routes(router: APIRouter, owner_of: Callable[[Request], Optional[str]], *,
                            session_factory: Callable[[], Any], check_context: Callable,
-                           complete: Callable) -> None:
+                           complete: Callable, cv_flags: Callable) -> None:
 
     @router.post("/letters/baseline")
     async def run_baseline(request: Request, limit: int = Query(5, ge=1, le=MAX_BASELINE_LETTERS)):
@@ -47,6 +48,7 @@ def register_letter_routes(router: APIRouter, owner_of: Callable[[Request], Opti
             db.close()
         rows = []
         for item in letters:
+            item["ctx"].cv_flags = await asyncio.to_thread(cv_flags, user, item["letter"])
             scored = await score_letter(item["letter"], item["ctx"], complete, user)
             rows.append({"application_id": item["application_id"], "company": item["company"],
                          "role": item["role"], **scored})

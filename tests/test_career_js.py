@@ -100,3 +100,11 @@ def test_setup_form_edits_banned_phrases():
     src = (_REPO / "static/js/careerSetup.js").read_text(encoding="utf-8")
     assert 'id="career-banned"' in src and "s.banned_phrases" in src
     assert "banned_phrases: _csv('career-banned')" in src
+
+
+def test_setup_form_edits_every_profile_field():
+    from services.career.settings import PROFILE_FIELDS
+    src = (_REPO / "static/js/careerSetup.js").read_text(encoding="utf-8")
+    for key in PROFILE_FIELDS:
+        assert f"'{key}'" in src
+    assert "career-profile-" in src and "profile: readProfile()" in src
