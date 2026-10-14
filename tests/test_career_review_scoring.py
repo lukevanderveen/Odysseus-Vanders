@@ -52,3 +52,14 @@ def test_aggregate_panel_averages_per_reviewer_then_overall():
     assert agg["overall"] == 55
     assert agg["verdict_counts"] == {"advance": 1, "maybe": 1, "reject": 1}
     assert rs.aggregate_panel({}) == {"overall": None, "by_reviewer": {}, "verdict_counts": {}}
+
+
+def test_hiring_manager_scores_the_swap_test():
+    assert "swap_test" in rs.REVIEW_DIMS["career_hiring_manager"]
+    assert rs.DIM_LABELS["swap_test"] == "Swap test"
+
+
+def test_dim_notes_explain_the_swap_test_only_to_its_reviewer():
+    notes = rs.dim_notes("career_hiring_manager")
+    assert "swap_test" in notes and "competitor" in notes
+    assert rs.dim_notes("career_engineer") == ""

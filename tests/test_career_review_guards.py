@@ -45,3 +45,15 @@ def test_annotate_appends_a_tool_check_section():
 def test_annotate_leaves_clean_reviews_untouched():
     body = '## Line edits\nreplace: "x" → with: "y"'
     assert rg.annotate(body, CV) == body
+
+
+def test_flags_a_rewrite_that_breaks_the_voice_rules():
+    body = 'replace: "I built" → with: "I am passionate about building — always!"'
+    warnings = rg.unsupported_edit_warnings(body, CV, banned_phrases=["passionate"])
+    assert len(warnings) == 1 and "passionate" in warnings[0] and "em dash" in warnings[0]
+
+
+def test_voice_check_uses_the_given_banned_phrases():
+    body = 'replace: "I built" → with: "I dive deep into problems"'
+    assert rg.unsupported_edit_warnings(body, CV, banned_phrases=["dive deep"])
+    assert rg.unsupported_edit_warnings(body, CV, banned_phrases=[]) == []

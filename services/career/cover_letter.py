@@ -19,9 +19,6 @@ from services.career.llm import render_template
 logger = logging.getLogger(__name__)
 
 _PACKAGED_PROMPTS = Path(__file__).parent / "prompts"
-MAX_WORDS = 300
-# Display casing; matched case-insensitively so warnings read naturally.
-BANNED_PHRASES = ("passionate", "thrilled", "I am writing to apply", "great fit", "fast-paced", "synergy", "leverage")
 _FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S)
 _TRAILING_FENCE_RE = re.compile(r"\n*```(?:json)?\s*\{.*?\}\s*```\s*$", re.S)
 
@@ -116,21 +113,3 @@ async def draft_cover_letter(app, owner: Optional[str], complete, evidence,
     })
     raw = await complete([{"role": "user", "content": prompt}], owner)
     return split_claims(raw)
-
-
-def rubric_check(markdown: str, hard_requirements: List[str]) -> List[str]:
-    warnings: List[str] = []
-    text = markdown or ""
-    words = len(text.split())
-    if words > MAX_WORDS:
-        warnings.append(f"Letter is {words} words; keep it under {MAX_WORDS} words.")
-    low = text.lower()
-    for phrase in BANNED_PHRASES:
-        if phrase.lower() in low:
-            warnings.append(f'Remove the phrase "{phrase}".')
-    reqs = [r for r in hard_requirements if r.strip()]
-    hit = [r for r in reqs if r.lower() in low]
-    if len(reqs) >= 2 and len(hit) < 2:
-        missing = ", ".join(r for r in reqs if r not in hit)
-        warnings.append(f"Name at least two posting specifics; not mentioned: {missing}.")
-    return warnings

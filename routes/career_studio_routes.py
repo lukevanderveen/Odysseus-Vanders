@@ -15,15 +15,17 @@ from fastapi import APIRouter, HTTPException, Request
 
 from core.database import ApplicationReview, Document, DocumentVersion, JobApplication, SessionLocal
 from routes.career_helpers import get_owned_application
+from routes.career_letter_routes import register_letter_routes
 from routes.career_posts_routes import register_post_routes
 from routes.career_review_helpers import ReviewerUpdate, review_to_dict, reviewer_query, reviewer_to_dict
 from routes.document_helpers import create_library_document
 from services.career.activity_remote import gather_activity
 from services.career.claims_store import load_claims, save_claims
 from services.career.posts import draft_post
-from services.career.cover_letter import NoEvidenceError, draft_cover_letter, extract_requirements, rubric_check
+from services.career.cover_letter import NoEvidenceError, draft_cover_letter, extract_requirements
 from services.career.evidence import Evidence
-from services.career.llm import complete
+from services.career.letter_checks import CheckContext, banned_phrases, run_checks, warnings as check_warnings
+from services.career.llm import complete, complete_utility
 from services.career.review_runner import queue_state, run_review
 from services.career.seeds import seed_reviewers
 from services.career.settings import load_career_settings
@@ -32,6 +34,7 @@ from src.auth_helpers import get_current_user
 logger = logging.getLogger(__name__)
 
 _review_tasks: set = set()   # keeps fire-and-forget panel runs alive
+TAGGER_MAX_TOKENS = 2500     # a 400-word letter echoed back sentence by sentence, as JSON
 
 
 def upsert_cover_letter_document(db, app: JobApplication, owner: Optional[str], markdown: str) -> Tuple[str, int]:
@@ -50,6 +53,15 @@ def upsert_cover_letter_document(db, app: JobApplication, owner: Optional[str], 
                            content=markdown, summary="Regenerated cover letter", source="ai"))
     db.commit()
     return doc.id, new_ver
+
+
+def check_context(db, app: JobApplication, requirements: Dict[str, Any]) -> CheckContext:
+    """Other company names come from the same owner's applications only."""
+    others = {c for (c,) in db.query(JobApplication.company)
+              .filter(JobApplication.owner == app.owner, JobApplication.id != app.id).all() if c}
+    return CheckContext(company=app.company or "", role=app.role or "", jd_text=app.jd_text or "",
+                        hard_requirements=requirements.get("hard", []), other_companies=sorted(others),
+                        banned_phrases=banned_phrases(load_career_settings(app.owner)))
 
 
 def _empty_payload() -> Dict[str, Any]:
@@ -82,7 +94,7 @@ def setup_career_studio_routes(rag_manager) -> APIRouter:
                     requirements=requirements, settings=settings)
             except NoEvidenceError as e:
                 raise HTTPException(409, str(e))
-            warnings = rubric_check(markdown, requirements.get("hard", []))
+            warnings = check_warnings(run_checks(markdown, check_context(db, app, requirements)))
             doc_id, version = upsert_cover_letter_document(db, app, user, markdown)
             payload = {"doc_id": doc_id, "version": version, "claims": claims,
                        "rubric_warnings": warnings, "requirements": requirements}
@@ -209,5 +221,13 @@ def setup_career_studio_routes(rag_manager) -> APIRouter:
         session_factory=lambda: SessionLocal(),
         gather=lambda *a, **kw: gather_activity(*a, **kw),
         draft=lambda *a, **kw: draft_post(*a, **kw),
+    )
+
+    # ── Letter quality baseline (plan 05a) ──────────────────────────────────
+    register_letter_routes(
+        router, _owner,
+        session_factory=lambda: SessionLocal(),
+        check_context=check_context,
+        complete=lambda messages, owner=None: complete_utility(messages, owner, max_tokens=TAGGER_MAX_TOKENS),
     )
     return router

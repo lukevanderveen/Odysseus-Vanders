@@ -64,3 +64,13 @@ def test_modules_parse_and_career_js_installs_them(node_available):
     assert "import { installReviewers } from './careerReviewers.js';" in src
     assert "import { installReview } from './careerReview.js';" in src
     assert "installReviewers(careerApi);" in src and "installReview(careerApi);" in src
+
+
+def test_js_dims_and_labels_mirror_python(node_available):
+    from services.career import review_scoring as rs
+    out = _run_node(textwrap.dedent("""
+        const { REVIEW_DIMS, DIM_LABELS } = await import('./static/js/careerReviewLogic.js');
+        console.log(JSON.stringify({ dims: REVIEW_DIMS, labels: DIM_LABELS }));
+    """))
+    assert out["dims"] == {k: list(v) for k, v in rs.REVIEW_DIMS.items()}
+    assert out["labels"] == rs.DIM_LABELS

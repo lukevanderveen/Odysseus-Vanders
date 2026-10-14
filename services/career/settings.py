@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 DEFAULTS: Dict[str, Any] = {
     "cv_filename": "",
     "voice_rules": "",
+    "banned_phrases": [],                    # added to letter_checks.BANNED_PHRASES
     "target_roles": [],
     "locations": [],
     "disclosure_default": "anonymous",      # anonymous | name_only | public
@@ -33,7 +34,7 @@ DEFAULTS: Dict[str, Any] = {
 }
 
 _INT_FIELDS = ("nudge_after_days", "ghosted_after_days")
-_LIST_FIELDS = ("target_roles", "locations", "blocklist_terms", "scan_account_ids", "prefilter_terms")
+_LIST_FIELDS = ("target_roles", "locations", "banned_phrases", "blocklist_terms", "scan_account_ids", "prefilter_terms")
 
 
 def settings_path(owner: Optional[str]) -> str:

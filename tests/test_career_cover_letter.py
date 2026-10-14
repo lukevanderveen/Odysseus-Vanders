@@ -122,21 +122,6 @@ async def test_draft_raises_without_cv_evidence():
                                     requirements={"hard": [], "nice": []}, settings={})
 
 
-# ── rubric ───────────────────────────────────────────────────────────────────
-
-def test_rubric_flags_length_banned_phrases_and_missing_specifics():
-    long = "word " * 301
-    warnings = cl.rubric_check(long + " I am passionate about this. I am writing to apply.", ["FastAPI", "PostgreSQL"])
-    assert any("300 words" in w for w in warnings)
-    assert any("passionate" in w for w in warnings)
-    assert any("I am writing to apply" in w for w in warnings)
-    assert any("FastAPI" in w and "PostgreSQL" in w for w in warnings)
-
-
-def test_rubric_passes_a_clean_letter():
-    letter = "Dear Acme,\n\nI have shipped FastAPI services backed by PostgreSQL for three years.\n\nLuke"
-    assert cl.rubric_check(letter, ["FastAPI", "PostgreSQL", "Python"]) == []
-
 
 async def test_draft_includes_company_context_from_their_site():
     complete = _complete_returning("Dear Acme,\n\nletter")

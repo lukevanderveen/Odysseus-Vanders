@@ -40,7 +40,16 @@ the spec is adjusted. Follow TDD per phase: pure functions first, LLM calls behi
 Each phase is shippable and testable on its own. Order differs slightly from the spec: cheap
 panel/profile fixes come early because they improve every letter immediately.
 
-### 05a — Letter checks + baseline  (spec stage 5, step 1)
+### 05a — Letter checks + baseline  (spec stage 5, step 1) — DONE 2026-10-14
+Built: `letter_checks.py` (replaces `rubric_check`; requirement and role matching uses key words,
+since extracted phrases are never repeated verbatim), `letter_tagger.py` + `prompts/letter_tagger.md`,
+`letter_baseline.py`, `routes/career_letter_routes.py` (`POST/GET /api/career/letters/baseline`).
+First real baseline (2 tool-drafted letters): avg 148 words, company+bridge 40%, pass rates
+length 0 / voice 50 / names 0 / logistics 0 / specifics 100 / balance 0.
+Follow-ups: score the hand-written examples in Personal Docs too (they aren't `JobApplication`
+documents); no UI for the baseline yet; tagger runs at the model's default temperature.
+
+Original plan:
 - New `services/career/letter_checks.py` (pure, no I/O). Replace `rubric_check` with
   `run_checks(letter, ctx) -> List[CheckResult(name, ok, detail, paragraph)]`:
   length 250–400; voice regex (banned phrases from settings, em dash, `!`, a small US→UK
@@ -53,7 +62,15 @@ panel/profile fixes come early because they improve every letter immediately.
   `Document`s and stores the numbers. This is the score to tune against.
 - Tests: one per check, a balance test with a long S paragraph hiding behind short C lines.
 
-### 05b — Panel and voice  (spec stage 5, panel changes)
+### 05b — Panel and voice  (spec stage 5, panel changes) — DONE 2026-10-14
+Built: `banned_phrases` setting (Setup tab field, merged with built-ins by
+`letter_checks.banned_phrases`); voice rules + banned phrases in `reviewer.md` and `panel.md`;
+`review_guards` flags rewrites that break them (shared `letter_checks.voice_problems`);
+`swap_test` dim on the hiring manager with scoring notes (`review_scoring.dim_notes`), JS mirror
+guarded by `test_js_dims_and_labels_mirror_python`; chair splits edits into "Apply now" /
+"Needs your input".
+
+Original plan:
 - Pass `voice_rules` + banned phrases into `reviewer.md` and `panel.md` (`build_context` gains a
   field). Run `letter_checks` voice regex over line-edit rewrites in `review_guards`.
 - Add a `swap_test` dimension: add it to `REVIEW_DIMS` (likely the hiring manager) **and** the JS

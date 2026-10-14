@@ -13,7 +13,7 @@ from typing import Dict, Tuple
 
 REVIEW_DIMS: Dict[str, Tuple[str, str]] = {
     "career_recruiter": ("ats_match", "clarity"),
-    "career_hiring_manager": ("role_fit", "impact_evidence"),
+    "career_hiring_manager": ("role_fit", "impact_evidence", "swap_test"),
     "career_engineer": ("technical_credibility", "specificity"),
     "career_hr": ("consistency_with_cv", "professionalism"),
 }
@@ -27,7 +27,18 @@ DIM_LABELS = {
     "specificity": "Specificity",
     "consistency_with_cv": "Consistency with CV",
     "professionalism": "Professionalism",
+    "swap_test": "Swap test",
 }
+
+# Scoring guidance for dims a persona prompt wouldn't otherwise explain.
+DIM_NOTES = {
+    "swap_test": ("swap_test: imagine the letter with a competitor's name swapped in. 100 = it could only "
+                  "have been written to this company; 0 = it would work unchanged for a competitor."),
+}
+
+
+def dim_notes(department: str) -> str:
+    return "\n".join(DIM_NOTES[d] for d in REVIEW_DIMS.get(department, ()) if d in DIM_NOTES)
 
 VERDICTS = ("advance", "maybe", "reject")
 PANEL_VERDICTS = ("advance", "revise", "rewrite")

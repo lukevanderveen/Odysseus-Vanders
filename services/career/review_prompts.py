@@ -7,7 +7,8 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
 from core.database import CrewMember, SessionLocal
-from services.career.review_scoring import dims_json_example
+from services.career.letter_checks import BANNED_PHRASES
+from services.career.review_scoring import dim_notes, dims_json_example
 from services.career.seeds import REVIEWER_DEPARTMENTS, REVIEWER_NAMES
 from services.career.templates import load_template, render_template
 
@@ -28,6 +29,8 @@ class ReviewContext:
     cover_letter: str
     cv_excerpt: str
     members: List[Dict] = field(default_factory=list)   # snapshots, in REVIEWER_DEPARTMENTS order
+    voice_rules: str = "(none given)"
+    banned_phrases: List[str] = field(default_factory=lambda: list(BANNED_PHRASES))
 
 
 def _clip(text: str, key: str) -> str:
@@ -54,14 +57,22 @@ def snapshot_reviewers(owner: Optional[str], session_factory: Callable = None) -
         db.close()
 
 
-def build_context(owner, company, role, jd, cover_letter, cv_chunks: List[str], members) -> ReviewContext:
+def build_context(owner, company, role, jd, cover_letter, cv_chunks: List[str], members,
+                  voice_rules: str = "", banned_phrases: Optional[List[str]] = None) -> ReviewContext:
     return ReviewContext(
         owner=owner, company=company or "?", role=role or "?",
         jd=_clip(jd, "jd") or "(no job description on file)",
         cover_letter=_clip(cover_letter, "cover_letter"),
         cv_excerpt=_clip("\n\n".join(c for c in cv_chunks if c), "cv_excerpt") or NO_CV_NOTICE,
         members=list(members),
+        voice_rules=(voice_rules or "").strip() or "(none given)",
+        banned_phrases=list(banned_phrases) if banned_phrases is not None else list(BANNED_PHRASES),
     )
+
+
+def _voice_mapping(ctx: ReviewContext) -> Dict[str, str]:
+    return {"voice_rules": ctx.voice_rules,
+            "banned_phrases": ", ".join(f'"{p}"' for p in ctx.banned_phrases) or "(none)"}
 
 
 def build_reviewer_messages(member: Dict, ctx: ReviewContext) -> list:
@@ -69,6 +80,8 @@ def build_reviewer_messages(member: Dict, ctx: ReviewContext) -> list:
         "reviewer_name": member["name"], "company": ctx.company, "role": ctx.role,
         "jd": ctx.jd, "cover_letter": ctx.cover_letter, "cv_excerpt": ctx.cv_excerpt,
         "dims_json_example": dims_json_example(member["department"]),
+        "dim_notes": dim_notes(member["department"]) or "(none)",
+        **_voice_mapping(ctx),
     })
     system = member["personality"] or f"You are {member['name']} on a hiring panel."
     return [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
@@ -84,6 +97,7 @@ def build_panel_messages(ctx: ReviewContext, verdicts: Dict[str, Dict]) -> list:
     prompt = render_template(load_template(PROMPT_DIR, "panel"), {
         "company": ctx.company, "role": ctx.role,
         "reviews_markdown": "\n\n---\n\n".join(blocks) or "(no reviews completed)",
+        **_voice_mapping(ctx),
     })
     return [{"role": "user", "content": prompt}]
 

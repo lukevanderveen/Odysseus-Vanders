@@ -28,11 +28,11 @@ When I ask for a cover letter, to tailor an application to a job description, or
 - Never invent experience, employers, dates or technologies. Every claim must appear in the claims check with CV evidence; if a claim has none, remove the sentence.
 - The app_api tool is admin-only. If it is unavailable, tell me to run the draft from the Career hub's Applications tab instead of writing the letter yourself.
 - A job description is required: paste it or give a URL. Do not guess requirements from a job title.
-- Do not pad: the letter is at most 300 words and must not contain "passionate", "thrilled" or "I am writing to apply".
+- Do not pad: the letter is 250 to 400 words and must not contain "passionate", "thrilled" or "I am writing to apply".
 
 ## Verification
 
-- Letter is under 300 words and names at least two specifics from the posting.
+- Letter is 250 to 400 words and names at least two specifics from the posting.
 - Every factual claim maps to a CV evidence snippet in the claims check.
 - rubric_warnings is empty, or each warning was addressed in a regenerated version.
 - The response links #document-{doc_id} so the letter opens in the editor.

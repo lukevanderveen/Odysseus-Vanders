@@ -5,7 +5,7 @@
 
 export const REVIEW_DIMS = {
   career_recruiter: ['ats_match', 'clarity'],
-  career_hiring_manager: ['role_fit', 'impact_evidence'],
+  career_hiring_manager: ['role_fit', 'impact_evidence', 'swap_test'],
   career_engineer: ['technical_credibility', 'specificity'],
   career_hr: ['consistency_with_cv', 'professionalism'],
 };
@@ -19,6 +19,7 @@ export const DIM_LABELS = {
   specificity: 'Specificity',
   consistency_with_cv: 'Consistency with CV',
   professionalism: 'Professionalism',
+  swap_test: 'Swap test',
 };
 
 const REVIEWER_LABELS = {

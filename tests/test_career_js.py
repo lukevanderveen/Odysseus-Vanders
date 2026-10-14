@@ -94,3 +94,9 @@ def test_job_details_form_is_editable_and_escaped(node_available):
     assert "Need &lt;Go>" in filled and "Need <Go>" not in filled
     assert 'value="https://acme.example"' in filled and "Rocket" in filled
     assert "disabled" in filled                               # busy fetch disables buttons
+
+
+def test_setup_form_edits_banned_phrases():
+    src = (_REPO / "static/js/careerSetup.js").read_text(encoding="utf-8")
+    assert 'id="career-banned"' in src and "s.banned_phrases" in src
+    assert "banned_phrases: _csv('career-banned')" in src

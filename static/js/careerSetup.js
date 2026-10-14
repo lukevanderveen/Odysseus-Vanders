@@ -24,6 +24,8 @@ export const setupHtml = (state) => {
       <h3 class="cc-section">Voice and targets</h3>
       <label class="assistant-field"><span>Voice rules (how you write: tone, phrases to avoid, length)</span>
         <textarea id="career-voice" class="settings-input" rows="4">${esc(s.voice_rules || '')}</textarea></label>
+      <label class="assistant-field"><span>Extra banned phrases (comma separated; checked in drafts and reviewer edits)</span>
+        <input id="career-banned" class="settings-input" type="text" value="${esc((s.banned_phrases || []).join(', '))}"></label>
       <label class="assistant-field"><span>Target roles (comma separated)</span>
         <input id="career-roles" class="settings-input" type="text" value="${esc((s.target_roles || []).join(', '))}"></label>
       <label class="assistant-field"><span>Locations (comma separated)</span>
@@ -56,6 +58,7 @@ const _csv = (id) => (document.getElementById(id)?.value || '').split(',').map((
 
 export const readSettingsForm = () => ({
   voice_rules: document.getElementById('career-voice')?.value || '',
+  banned_phrases: _csv('career-banned'),
   target_roles: _csv('career-roles'),
   locations: _csv('career-locations'),
   nudge_after_days: Number(document.getElementById('career-nudge')?.value || 10),

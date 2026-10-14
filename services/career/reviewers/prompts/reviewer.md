@@ -20,7 +20,16 @@ Then output exactly one fenced json block and nothing after it. Use integers 0-1
 {dims_json_example}
 ```
 
+Scoring notes:
+{dim_notes}
+
 Ground every point in the job description, the cover letter, or the CV. If the CV is provided but does not cover a claim, say "unverified" for that claim instead of guessing.
+
+## Candidate's voice rules
+Every rewrite you suggest must follow these rules and must never use a banned phrase. Do not mark the letter down for following them.
+{voice_rules}
+
+Banned phrases: {banned_phrases}
 
 ## Job description
 {jd}

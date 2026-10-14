@@ -216,3 +216,37 @@ async def test_reviewer_edits_with_placeholders_are_flagged_in_the_stored_body(d
     body = json.loads(db.get(ApplicationReview, "rv1").verdicts)["career_hr"]["body"]
     db.close()
     assert "## Tool checks" in body and "[degree]" in body
+
+
+def _member(dept="career_hiring_manager"):
+    return {"id": "m", "department": dept, "name": seeds.REVIEWER_NAMES[dept], "personality": "",
+            "model": "", "endpoint_url": ""}
+
+
+def test_reviewer_prompt_carries_dim_notes_voice_rules_and_banned_phrases():
+    ctx = prompts.build_context("vanders", "Acme", "Dev", "jd", "letter", ["cv"], [],
+                                voice_rules="Plain British English.", banned_phrases=["passionate", "dive deep"])
+    user = prompts.build_reviewer_messages(_member(), ctx)[-1]["content"]
+    assert "competitor" in user and "Plain British English." in user and "dive deep" in user
+
+
+def test_panel_prompt_carries_voice_rules_and_banned_phrases():
+    ctx = prompts.build_context("vanders", "Acme", "Dev", "jd", "letter", ["cv"], [],
+                                voice_rules="Plain British English.", banned_phrases=["dive deep"])
+    user = prompts.build_panel_messages(ctx, {})[-1]["content"]
+    assert "Plain British English." in user and "dive deep" in user
+
+
+def test_context_without_voice_rules_says_so():
+    ctx = prompts.build_context("vanders", "Acme", "Dev", "jd", "letter", ["cv"], [])
+    assert ctx.voice_rules == "(none given)" and "passionate" in ctx.banned_phrases
+
+
+async def test_run_review_passes_the_owners_voice_settings(db_factory, monkeypatch, tmp_path):
+    import services.career.settings as cs
+    monkeypatch.setattr(cs, "DATA_DIR", str(tmp_path))
+    cs.save_career_settings("vanders", {"voice_rules": "No buzzwords.", "banned_phrases": ["dive deep"]})
+    log = []
+    await runner.run_review("rv1", complete=_fake_complete(log), session_factory=db_factory,
+                            evidence=fake_evidence, notify=lambda **kw: None)
+    assert all("No buzzwords." in m[-1]["content"] and "dive deep" in m[-1]["content"] for m in log)

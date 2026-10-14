@@ -104,7 +104,9 @@ def test_draft_creates_document_claims_and_warnings(env):
     assert body["version"] == 1
     assert body["claims"] == [{"claim": "built FastAPI services", "evidence": "Beta Ltd"}]
     assert body["requirements"] == {"hard": ["FastAPI", "PostgreSQL"], "nice": []}
-    assert body["rubric_warnings"] == []
+    warnings = body["rubric_warnings"]
+    assert any("words" in w for w in warnings) and any("Names:" in w for w in warnings)
+    assert not any("posting specifics" in w for w in warnings)
     assert len(calls) == 2
     db = TestSession()
     doc = db.get(Document, body["doc_id"])
@@ -165,3 +167,90 @@ def test_get_before_any_draft_is_empty(env):
     client, _, _ = env
     assert client.get("/api/career/applications/a1/cover-letter").json() == {
         "doc_id": None, "version": 0, "claims": [], "rubric_warnings": [], "requirements": {}}
+
+
+def test_draft_flags_the_owners_other_company_names_only(env, monkeypatch):
+    client, TestSession, _ = env
+    db = TestSession()
+    db.add(JobApplication(id="a3", owner="vanders", company="Globex", role="Dev"))
+    db.commit()
+    db.close()
+    outputs = ['{"hard": [], "nice": []}', "Dear Acme,\n\nUnlike Globex and Theirs, Acme ships."]
+
+    async def fake_complete(messages, owner=None):
+        return outputs.pop(0)
+    monkeypatch.setattr(sr, "complete", fake_complete)
+    warnings = client.post("/api/career/applications/a1/cover-letter").json()["rubric_warnings"]
+    names = next(w for w in warnings if w.startswith("Names:"))
+    assert "Globex" in names and "Theirs" not in names
+
+
+def _seed_letters(TestSession):
+    db = TestSession()
+    for aid, owner, company, text in (("a1", "vanders", "Acme", "Dear Acme,\n\nAcme backend letter."),
+                                      ("b1", "vanders", "Beta", "Dear Beta,\n\nBeta letter."),
+                                      ("a2", "other", "Theirs", "Dear Theirs,\n\nTheir letter.")):
+        app = db.get(JobApplication, aid)
+        if app is None:
+            app = JobApplication(id=aid, owner=owner, company=company, role="Dev")
+            db.add(app)
+        db.add(Document(id=f"d-{aid}", owner=owner, title="Cover letter", language="markdown",
+                        current_content=text))
+        app.cover_letter_doc_id = f"d-{aid}"
+    db.commit()
+    db.close()
+
+
+def test_baseline_scores_only_the_owners_letters_and_is_stored(env, monkeypatch, tmp_path):
+    import services.career.letter_baseline as lb
+    client, TestSession, _ = env
+    monkeypatch.setattr(lb, "DATA_DIR", str(tmp_path))
+    _seed_letters(TestSession)
+    claims_store.save_claims("vanders", "a1", {"requirements": {"hard": ["FastAPI", "PostgreSQL"]}})
+    seen = []
+
+    async def fake_utility(messages, owner=None, max_tokens=800):
+        seen.append(owner)
+        return '{"sentences": [{"paragraph": 1, "text": "Acme backend letter.", "tag": "C"}]}'
+    monkeypatch.setattr(sr, "complete_utility", fake_utility)
+
+    res = client.post("/api/career/letters/baseline?limit=5")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert {row["company"] for row in body["letters"]} == {"Acme", "Beta"}
+    assert body["summary"]["letters"] == 2 and body["summary"]["avg_company_bridge_pct"] == 100
+    acme = next(r for r in body["letters"] if r["company"] == "Acme")
+    assert any(c["name"] == "specifics" and not c["ok"] for c in acme["checks"])
+    assert seen == ["vanders", "vanders"]
+    assert client.get("/api/career/letters/baseline").json() == body
+
+
+def test_baseline_respects_limit(env, monkeypatch, tmp_path):
+    import services.career.letter_baseline as lb
+    client, TestSession, _ = env
+    monkeypatch.setattr(lb, "DATA_DIR", str(tmp_path))
+    _seed_letters(TestSession)
+
+    async def fake_utility(messages, owner=None, max_tokens=800):
+        return "{}"
+    monkeypatch.setattr(sr, "complete_utility", fake_utility)
+    assert len(client.post("/api/career/letters/baseline?limit=1").json()["letters"]) == 1
+
+
+def test_baseline_get_before_any_run_is_empty(env, monkeypatch, tmp_path):
+    import services.career.letter_baseline as lb
+    monkeypatch.setattr(lb, "DATA_DIR", str(tmp_path))
+    client, _, _ = env
+    assert client.get("/api/career/letters/baseline").json() == {"letters": [], "summary": None}
+
+
+def test_draft_checks_use_the_owners_banned_phrases(env, monkeypatch):
+    client, _, _ = env
+    cs.save_career_settings("vanders", {"banned_phrases": ["dive deep"]})
+    outputs = ['{"hard": [], "nice": []}', "Dear Acme,\n\nI dive deep into Backend work at Acme."]
+
+    async def fake_complete(messages, owner=None):
+        return outputs.pop(0)
+    monkeypatch.setattr(sr, "complete", fake_complete)
+    warnings = client.post("/api/career/applications/a1/cover-letter").json()["rubric_warnings"]
+    assert any(w.startswith("Voice:") and "dive deep" in w for w in warnings)

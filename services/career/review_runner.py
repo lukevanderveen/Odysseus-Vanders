@@ -21,7 +21,9 @@ from services.career.review_prompts import (
 from services.career.review_scoring import (
     REVIEW_DIMS, aggregate_panel, parse_panel_verdict, parse_review_block, strip_json_fence,
 )
+from services.career.letter_checks import banned_phrases
 from services.career.review_guards import annotate
+from services.career.settings import load_career_settings
 from services.career.seeds import seed_reviewers
 
 logger = logging.getLogger(__name__)
@@ -96,7 +98,10 @@ def _load_context(db, review: ApplicationReview, evidence, session_factory):
     except Exception:
         logger.warning("DEGRADED: CV evidence unavailable for review %s", review.id, exc_info=True)
         chunks = []
-    return app.owner, build_context(app.owner, app.company, app.role, app.jd_text, doc.current_content, chunks, members)
+    settings = load_career_settings(app.owner)
+    return app.owner, build_context(app.owner, app.company, app.role, app.jd_text, doc.current_content, chunks,
+                                    members, voice_rules=settings.get("voice_rules") or "",
+                                    banned_phrases=banned_phrases(settings))
 
 
 async def _run_panel(ctx, complete, owner, session_factory) -> tuple:
@@ -106,7 +111,7 @@ async def _run_panel(ctx, complete, owner, session_factory) -> tuple:
         parsed = parse_review_block(raw, member["department"])
         verdicts[member["department"]] = {
             "name": member["name"], "verdict": parsed["verdict"],
-            "body": annotate(strip_json_fence(raw), ctx.cv_excerpt), "scores": parsed["scores"],
+            "body": annotate(strip_json_fence(raw), ctx.cv_excerpt, ctx.banned_phrases), "scores": parsed["scores"],
         }
     panel_raw = await _call(None, build_panel_messages(ctx, verdicts), complete, owner, session_factory)
     scores = aggregate_panel(verdicts)

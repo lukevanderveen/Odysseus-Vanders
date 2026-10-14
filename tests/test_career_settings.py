@@ -50,3 +50,10 @@ def test_integer_fields_are_coerced_and_bounded(data_dir):
     out = cs.save_career_settings("vanders", {"nudge_after_days": "7", "ghosted_after_days": -3})
     assert out["nudge_after_days"] == 7
     assert out["ghosted_after_days"] == 1
+
+
+def test_banned_phrases_is_a_string_list(data_dir):
+    assert cs.load_career_settings("vanders")["banned_phrases"] == []
+    out = cs.save_career_settings("vanders", {"banned_phrases": ["dive deep", 3]})
+    assert out["banned_phrases"] == ["dive deep", "3"]
+    assert cs.save_career_settings("vanders", {"banned_phrases": "nope"})["banned_phrases"] == []
